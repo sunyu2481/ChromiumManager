@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql/driver"
 	"embed"
 	"encoding/json"
@@ -21,18 +22,46 @@ import (
 //go:embed web/dist
 var webFS embed.FS
 
-const serverAddr = "127.0.0.1:10101"
-
 var (
 	sq      *sqids.Sqids
 	dataDir = "data"
+
+	// listenAddr 是管理面地址，承载 UI 与全部 CRUD 接口。
+	// 默认只监听回环，保证管理接口不出容器。
+	listenAddr = "127.0.0.1:10101"
+
+	// agentAddr 是 agent 面地址，只承载 /agent/* 与 /cdp/* 路由。
+	// 留空表示完全禁用：不启动第二个 server，也不给浏览器加远程调试参数。
+	agentAddr string
+
+	// agentToken 非空时，agent 面要求 Authorization: Bearer <token>。
+	agentToken string
+
+	// agentPublicHost 是拼接 CDP 地址时的兜底主机名，
+	// 仅在请求未携带 Host 头时使用，默认取容器 hostname。
+	agentPublicHost string
 )
+
+// agentEnabled 表示是否开启了 agent 面。
+// 浏览器启动参数是否包含远程调试开关也由它决定。
+func agentEnabled() bool {
+	return agentAddr != ""
+}
 
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 
 	if v := os.Getenv("DATA_DIR"); v != "" {
 		dataDir = v
+	}
+	if v := os.Getenv("LISTEN_ADDR"); v != "" {
+		listenAddr = v
+	}
+	agentAddr = os.Getenv("AGENT_ADDR")
+	agentToken = os.Getenv("AGENT_TOKEN")
+	agentPublicHost = os.Getenv("AGENT_PUBLIC_HOST")
+	if agentPublicHost == "" {
+		agentPublicHost, _ = os.Hostname()
 	}
 
 	var err error
@@ -171,6 +200,24 @@ func withMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// withAgentAuth 在 agentToken 非空时校验 Bearer token。
+// 用 subtle.ConstantTimeCompare 避免比较耗时泄漏 token 内容。
+func withAgentAuth(next http.Handler) http.Handler {
+	if agentToken == "" {
+		return next
+	}
+	expected := []byte("Bearer " + agentToken)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := []byte(r.Header.Get("Authorization"))
+		if subtle.ConstantTimeCompare(got, expected) != 1 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="agent"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	initDB()
 	defer db.Close()
@@ -202,6 +249,9 @@ func main() {
 	mux.HandleFunc("POST /update_proxy", updateProxy)
 	mux.HandleFunc("POST /delete_proxy", deleteProxy)
 
+	// Agent config (供前端展示 CDP 接入地址)
+	mux.HandleFunc("GET /get_agent_config", getAgentConfig)
+
 	// SSE
 	mux.HandleFunc("GET /events", eventsHandler)
 
@@ -209,15 +259,40 @@ func main() {
 	fsSub, _ := fs.Sub(webFS, "web/dist")
 	mux.Handle("/", http.FileServer(http.FS(fsSub)))
 
-	handler := withMiddleware(mux)
-	server := &http.Server{Addr: serverAddr, Handler: handler}
+	servers := []*http.Server{
+		{Addr: listenAddr, Handler: withMiddleware(mux)},
+	}
+	log.Printf("[Server] admin listening on %s", listenAddr)
 
-	go func() {
-		log.Printf("[Server] listening on %s", serverAddr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[Server] listen error: %v", err)
+	// agent 面单独一个 mux 与 server：只挂载 /agent/* 与 /cdp/*，
+	// 管理接口与静态资源不在其上，即便对外监听也不会暴露 CRUD 能力。
+	if agentEnabled() {
+		agentMux := http.NewServeMux()
+		agentMux.HandleFunc("GET /agent/browsers", agentBrowsers)
+		agentMux.HandleFunc("POST /agent/acquire", agentAcquire)
+		agentMux.HandleFunc("POST /agent/release", agentRelease)
+		agentMux.HandleFunc("/cdp/{id}/{path...}", cdpProxyHandler)
+
+		servers = append(servers, &http.Server{
+			Addr:    agentAddr,
+			Handler: withMiddleware(withAgentAuth(agentMux)),
+			// CDP 会话是长连接，禁用写超时，交给客户端与浏览器自行断开
+			ReadHeaderTimeout: 10 * time.Second,
+		})
+		authMode := "no auth"
+		if agentToken != "" {
+			authMode = "bearer token"
 		}
-	}()
+		log.Printf("[Server] agent listening on %s (%s)", agentAddr, authMode)
+	}
+
+	for _, s := range servers {
+		go func() {
+			if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("[Server] listen error on %s: %v", s.Addr, err)
+			}
+		}()
+	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -226,8 +301,10 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("[Server] forced shutdown: %v", err)
+	for _, s := range servers {
+		if err := s.Shutdown(ctx); err != nil {
+			log.Printf("[Server] forced shutdown on %s: %v", s.Addr, err)
+		}
 	}
 	log.Printf("[Server] exited gracefully")
 }

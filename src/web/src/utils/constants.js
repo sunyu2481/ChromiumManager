@@ -153,4 +153,5 @@ export const screens = [
   '3840x2160'
 ]
 
-export const BASE_URL = 'http://127.0.0.1:10101'
+// 与后端同源，使用相对路径；SSE 等绝对 URL 场景用 window.location.origin
+export const BASE_URL = ''

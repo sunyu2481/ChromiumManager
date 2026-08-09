@@ -40,6 +40,12 @@ COPY --from=builder /build/manager /usr/bin/manager
 
 COPY /root /
 
+# 3000: selkies 远程桌面（对外暴露，用户通过浏览器访问桌面）
+# 10102: agent 面 CDP 网关（docker 网络内部使用，不需要 publish 到宿主机）
 EXPOSE 3000
+EXPOSE 10102
+
+# agent 面默认开启；部署时不想暴露可设 AGENT_ADDR=
+ENV AGENT_ADDR=0.0.0.0:10102
 
 VOLUME /config

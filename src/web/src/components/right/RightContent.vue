@@ -51,6 +51,14 @@
                 关闭
               </el-button>
               <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
+              <el-button
+                v-if="agentConfig.enabled"
+                size="small"
+                @click.stop="onCopyCDP(scope.row)"
+                title="复制 CDP 地址供 Agent 使用"
+              >
+                CDP
+              </el-button>
             </template>
             <template v-else>
               <el-button type="primary" size="small" @click.stop="onLaunchClick(scope.row)">
@@ -384,7 +392,8 @@ import {
   stopProfile,
   showProfile,
   exportCookies,
-  importCookies
+  importCookies,
+  getAgentConfig
 } from '@/api'
 import { validateForm } from '@/utils/common'
 import { languages, timezones, screens, BASE_URL } from '@/utils/constants'
@@ -400,6 +409,8 @@ const tableRef = ref(null)
 const formRef = ref(null)
 const formDialog = ref(false)
 const runningSet = ref(new Set())
+// agentConfig 缓存 /get_agent_config 的结果，驱动"复制CDP地址"按钮的显隐
+const agentConfig = ref({ enabled: false, port: '' })
 const proxyManageVisible = ref(false)
 const selectedRow = ref(null)
 
@@ -462,6 +473,12 @@ onMounted(() => {
       if (Array.isArray(ids)) runningSet.value = new Set(ids)
     } catch {}
   }
+  // 静默拉取 agent 配置，失败不影响主流程
+  getAgentConfig()
+    .then((data) => {
+      if (data) agentConfig.value = data
+    })
+    .catch(() => {})
 })
 
 onUnmounted(() => {
@@ -706,6 +723,16 @@ const onStopClick = async (row) => {
   } catch (err) {
     if (!err?.silent) ElMessage.error('关闭失败: ' + (err?.message || err))
   }
+}
+
+// onCopyCDP 将该实例的 CDP 接入地址复制到剪贴板，供 agent 容器使用。
+// 地址格式：http://<当前 hostname>:<agent 端口>/cdp/<profile id>
+const onCopyCDP = (row) => {
+  const { port } = agentConfig.value
+  const url = `http://${window.location.hostname}:${port}/cdp/${row._id}`
+  navigator.clipboard.writeText(url).then(() => {
+    ElMessage.success('CDP 地址已复制')
+  })
 }
 
 const onMoreCommand = (cmd, row) => {

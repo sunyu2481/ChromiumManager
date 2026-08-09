@@ -30,6 +30,21 @@ export default defineConfig({
       }
     }
   },
+  // 开发模式下把 API 请求透传给 Go 服务，避免 CORS 拦截
+  server: {
+    proxy: {
+      '/get_': 'http://127.0.0.1:10101',
+      '/add_': 'http://127.0.0.1:10101',
+      '/update_': 'http://127.0.0.1:10101',
+      '/delete_': 'http://127.0.0.1:10101',
+      '/launch_': 'http://127.0.0.1:10101',
+      '/stop_': 'http://127.0.0.1:10101',
+      '/show_': 'http://127.0.0.1:10101',
+      '/export_': 'http://127.0.0.1:10101',
+      '/import_': 'http://127.0.0.1:10101',
+      '/events': { target: 'http://127.0.0.1:10101', ws: true }
+    }
+  },
   build: {
     rollupOptions: {
       output: {

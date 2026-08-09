@@ -1,7 +1,7 @@
 import { ElMessage } from 'element-plus'
 
 const service = axios.create({
-  baseURL: 'http://127.0.0.1:10101',
+  baseURL: '',
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json'

@@ -75,6 +75,6 @@ export const updateProxy = (data) => {
   return request.post(`/update_proxy`, data)
 }
 
-export const deleteProxy = (id) => {
-  return request.post(`/delete_proxy`, { id })
+export const getAgentConfig = () => {
+  return request.get('/get_agent_config')
 }

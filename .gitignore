@@ -1,0 +1,6 @@
+# Go 编译产物（模块名为 fingerprint-chromium-manager，go build 默认输出同名二进制）
+/src/fingerprint-chromium-manager
+/src/manager
+
+# 前端构建产物（Docker 构建时由 nodebuilder 阶段生成并注入）
+/src/web/dist/

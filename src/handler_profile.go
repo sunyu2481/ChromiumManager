@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -202,9 +201,7 @@ func deleteProfile(w http.ResponseWriter, r *http.Request) {
 
 func showProfile(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	runningMu.Lock()
-	rp, ok := runningProfiles[id]
-	runningMu.Unlock()
+	rp, ok := getRunning(id)
 
 	if !ok {
 		writeJSON(w, Response[any]{Code: 404, Message: "not running"})
@@ -230,143 +227,12 @@ func launchProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, Response[any]{Code: 400, Message: "invalid request body"})
 		return
 	}
-	idStr := req.ID
-	rawID := decodeID(idStr)
 
-	var p Profile
-	var rawProxy int64
-	var cookieStr string
-	err := db.QueryRow("SELECT id, name, proxy, args, fingerprint, cookie FROM profiles WHERE id=?", rawID).
-		Scan(&rawID, &p.Name, &rawProxy, &p.Args, &p.Fingerprint, &cookieStr)
-	if err != nil {
-		writeJSON(w, Response[any]{Code: 404, Message: "Profile not found: " + err.Error()})
+	if _, _, err := startProfile(req.ID); err != nil {
+		writeJSON(w, Response[any]{Code: 500, Message: err.Error()})
 		return
 	}
-	p.ID = idStr
-
-	userDataDir := filepath.Join(dataDir, "profiles", encodeID(int64(p.Fingerprint.Seed)))
-	absUserDataDir, err := filepath.Abs(userDataDir)
-	if err != nil {
-		absUserDataDir = userDataDir
-	}
-	os.MkdirAll(absUserDataDir, 0755)
-
-	singletonFiles, _ := filepath.Glob(filepath.Join(absUserDataDir, "Singleton*"))
-	for _, f := range singletonFiles {
-		os.Remove(f)
-	}
-
-	cookiePath := filepath.Join(absUserDataDir, "Default", "Cookies")
-
-	if _, err := os.Stat(cookiePath); os.IsNotExist(err) && cookieStr != "" {
-		var cookies []Cookie
-		if json.Unmarshal([]byte(cookieStr), &cookies) == nil && len(cookies) > 0 {
-			writeCookiesToFile(cookiePath, cookies)
-		}
-	}
-
-	chromePath := findBrowserPath()
-	launchArgs := []string{
-		"--user-data-dir=" + absUserDataDir,
-		"--profile-name=" + p.Name,
-		"--no-first-run",
-		"--no-default-browser-check",
-		"--password-store=basic",
-	}
-
-	proxy := getProxyInfo(rawProxy)
-	if proxy.URL != "" {
-		launchArgs = append(launchArgs, "--proxy-server="+proxy.URL)
-	}
-
-	fp := p.Fingerprint
-	if fp.RandomFingerprint && fp.Seed != 0 {
-		launchArgs = append(launchArgs, fmt.Sprintf("--fingerprint=%d", fp.Seed))
-	}
-	if fp.Platform != "" {
-		launchArgs = append(launchArgs, "--fingerprint-platform="+fp.Platform)
-	}
-	if fp.Brand != "" {
-		launchArgs = append(launchArgs, "--fingerprint-brand="+fp.Brand)
-	}
-	if fp.HardwareConcurrency != "" {
-		launchArgs = append(launchArgs, "--fingerprint-hardware-concurrency="+fp.HardwareConcurrency)
-	}
-	if fp.DeviceMemory != "" {
-		launchArgs = append(launchArgs, "--fingerprint-device-memory="+fp.DeviceMemory)
-	}
-	if fp.Screen != "" {
-		launchArgs = append(launchArgs, "--fingerprint-screen="+fp.Screen)
-	}
-	for _, feature := range fp.DisableFeatures {
-		switch feature {
-		case "webrtc":
-			launchArgs = append(launchArgs, "--force-webrtc-ip-handling-policy")
-			launchArgs = append(launchArgs, "--webrtc-ip-handling-policy=disable_non_proxied_udp")
-		}
-	}
-
-	effLang := fp.Lang
-	if fp.ProxyLang && proxy.Lang != "" {
-		effLang = proxy.Lang
-	}
-	effTimezone := fp.Timezone
-	if fp.ProxyTimezone && proxy.Timezone != "" {
-		effTimezone = proxy.Timezone
-	}
-	effLocation := fp.Location
-	if fp.ProxyLocation && proxy.Location != "" {
-		effLocation = proxy.Location
-	}
-	if effLang != "" {
-		launchArgs = append(launchArgs, "--lang="+effLang)
-		launchArgs = append(launchArgs, "--accept-lang="+effLang)
-	}
-	if effTimezone != "" {
-		launchArgs = append(launchArgs, "--fingerprint-timezone="+effTimezone)
-	}
-	if effLocation != "" {
-		launchArgs = append(launchArgs, "--fingerprint-location="+effLocation)
-	}
-	if len(fp.DisableFingerprint) > 0 {
-		launchArgs = append(launchArgs, "--disable-fingerprint="+strings.Join(fp.DisableFingerprint, ","))
-	}
-
-	if p.Args != "" {
-		launchArgs = append(launchArgs, splitArgs(p.Args)...)
-	}
-
-	cmd := exec.Command(chromePath, launchArgs...)
-	if err := cmd.Start(); err != nil {
-		writeJSON(w, Response[any]{Code: 500, Message: "Failed to launch: " + err.Error()})
-		return
-	}
-
-	done := make(chan struct{})
-	runningMu.Lock()
-	runningProfiles[p.ID] = &runningProfile{cmd: cmd, done: done, profileID: idStr, cookiePath: cookiePath}
-	runningMu.Unlock()
-
 	writeJSON(w, Response[any]{Code: 200, Message: "success"})
-	broadcastRunning()
-
-	go func() {
-		cmd.Wait()
-		close(done)
-		log.Printf("[Chrome] profile %s (%s) exited", p.Name, p.ID)
-
-		if cookies := readCookiesFromFile(cookiePath); len(cookies) > 0 {
-			if data, err := json.Marshal(cookies); err == nil {
-				db.Exec("UPDATE profiles SET cookie=? WHERE id=?", string(data), rawID)
-				log.Printf("[Chrome] exported %d cookies for profile %s", len(cookies), p.ID)
-			}
-		}
-
-		runningMu.Lock()
-		delete(runningProfiles, p.ID)
-		runningMu.Unlock()
-		broadcastRunning()
-	}()
 }
 
 func stopProfile(w http.ResponseWriter, r *http.Request) {
@@ -377,32 +243,35 @@ func stopProfile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, Response[any]{Code: 400, Message: "invalid request body"})
 		return
 	}
-	id := req.ID
-	runningMu.Lock()
-	rp, ok := runningProfiles[id]
-	runningMu.Unlock()
+	rp, ok := getRunning(req.ID)
 
 	if !ok {
 		writeJSON(w, Response[any]{Code: 404, Message: "not running"})
 		return
 	}
 
-	if rp.cmd.Process != nil {
-		if runtime.GOOS == "windows" {
-			closeWindowsByPID(uint32(rp.cmd.Process.Pid))
-		} else {
-			rp.cmd.Process.Signal(syscall.SIGTERM)
-		}
-		go func() {
-			timer := time.NewTimer(5 * time.Second)
-			defer timer.Stop()
-			select {
-			case <-rp.done:
-			case <-timer.C:
-				rp.cmd.Process.Kill()
-			}
-		}()
-	}
-
+	stopRunning(rp)
 	writeJSON(w, Response[any]{Code: 200, Message: "success"})
+}
+
+// stopRunning 请求实例退出：Windows 走关窗口消息，其余平台发 SIGTERM，
+// 5 秒内未退出则强杀。函数立即返回，不等待进程结束。
+func stopRunning(rp *runningProfile) {
+	if rp.cmd.Process == nil {
+		return
+	}
+	if runtime.GOOS == "windows" {
+		closeWindowsByPID(uint32(rp.cmd.Process.Pid))
+	} else {
+		rp.cmd.Process.Signal(syscall.SIGTERM)
+	}
+	go func() {
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-rp.done:
+		case <-timer.C:
+			rp.cmd.Process.Kill()
+		}
+	}()
 }
