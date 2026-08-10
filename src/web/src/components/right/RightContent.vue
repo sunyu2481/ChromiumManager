@@ -41,7 +41,8 @@
             </el-icon>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="200">
+        <!-- 运行中要容纳 激活/关闭/编辑/CDP 四个按钮，宽度按最宽分支预留 -->
+        <el-table-column fixed="right" label="操作" width="260">
           <template #default="scope">
             <template v-if="runningSet.has(scope.row._id)">
               <el-button type="primary" size="small" @click.stop="onShowClick(scope.row)">

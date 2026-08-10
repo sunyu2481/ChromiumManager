@@ -59,7 +59,7 @@
 ```yaml
 services:
   chromium-manager:
-    image: tumi/chromium-manager:latest
+    image: ghcr.io/sunyu2481/chromium-manager:latest
     container_name: chromium-manager
     shm_size: 1gb
     environment:
@@ -91,7 +91,7 @@ docker run -d \
   -p 3001:3001 \
   -v ./config:/config \
   --restart unless-stopped \
-  tumi/chromium-manager:latest
+  ghcr.io/sunyu2481/chromium-manager:latest
 ```
 
 ### 通过以下网址访问应用
@@ -132,7 +132,7 @@ docker run -d \
 ```yaml
 services:
   chromium-manager:
-    image: tumi/chromium-manager:latest
+    image: ghcr.io/sunyu2481/chromium-manager:latest
     shm_size: 1gb
     environment:
       - PUID=1000

@@ -1,0 +1,7 @@
+# pnpm 10+ 要求显式声明允许执行 postinstall 脚本的依赖。
+# 这三个都是构建链必需：esbuild 需要平台二进制，vue-demi 需要切换 Vue 版本，
+# @parcel/watcher 是 vite 的可选原生监听后端。
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  vue-demi: true
