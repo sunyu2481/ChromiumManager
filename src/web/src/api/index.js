@@ -83,3 +83,8 @@ export const deleteProxy = (id) => {
 export const getAgentConfig = () => {
   return request.get('/get_agent_config')
 }
+
+// 认证接口
+export const logout = () => {
+  return request.post('/auth/logout')
+}

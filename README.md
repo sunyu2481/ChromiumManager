@@ -56,6 +56,8 @@
 
 ### Docker Compose
 
+启动前请通过宿主机环境变量或 Compose 的 `.env` 文件设置高强度 `AUTH_PASSWORD`。
+
 ```yaml
 services:
   chromium-manager:
@@ -67,6 +69,8 @@ services:
       - PGID=1000
       - TZ=Asia/Shanghai
       - LC_ALL=zh_CN.UTF-8
+      - AUTH_USERNAME=admin
+      - AUTH_PASSWORD=${AUTH_PASSWORD:?请先设置 AUTH_PASSWORD}
     ports:
       - 3001:3001
     volumes:
@@ -80,6 +84,8 @@ docker compose up -d
 
 ### Docker CLI
 
+以下命令会从宿主机环境读取 `AUTH_PASSWORD`，请先设置该变量。
+
 ```bash
 docker run -d \
   --name chromium-manager \
@@ -88,6 +94,8 @@ docker run -d \
   -e PGID=1000 \
   -e TZ=Asia/Shanghai \
   -e LC_ALL=zh_CN.UTF-8 \
+  -e AUTH_USERNAME=admin \
+  -e AUTH_PASSWORD \
   -p 3001:3001 \
   -v ./config:/config \
   --restart unless-stopped \
@@ -139,6 +147,8 @@ services:
       - PGID=1000
       - TZ=Asia/Shanghai
       - LC_ALL=zh_CN.UTF-8
+      - AUTH_USERNAME=admin
+      - AUTH_PASSWORD=${AUTH_PASSWORD:?请先设置 AUTH_PASSWORD}
       - AGENT_TOKEN=your-secret-token   # 可选；不设则同网络内免鉴权
     ports:
       - 3001:3001    # selkies 远程桌面
@@ -215,6 +225,8 @@ curl -X POST http://chromium-manager:10102/agent/release \
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
+| `AUTH_USERNAME` | `admin` | 管理界面登录用户名 |
+| `AUTH_PASSWORD` | 无（必填） | 管理界面登录密码；未设置时 manager 会拒绝启动 |
 | `AGENT_ADDR` | `0.0.0.0:10102` | Agent 面监听地址；设为空值可完全禁用 |
 | `AGENT_TOKEN` | 空（不鉴权） | 非空时 agent 接口要求 `Authorization: Bearer <token>` |
 | `LISTEN_ADDR` | `127.0.0.1:10101` | 管理面监听地址（管理 UI 与 CRUD，默认不出容器） |

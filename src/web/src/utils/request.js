@@ -18,6 +18,11 @@ service.interceptors.response.use(
     }
   },
   (err) => {
+    if (err.response?.status === 401) {
+      window.location.replace('/login')
+      err.silent = true
+      return Promise.reject(err)
+    }
     const msg = err.message?.includes('timeout') ? '请求超时！' : '连接服务失败！'
     ElMessage({ type: 'error', showClose: true, message: msg })
     err.silent = true

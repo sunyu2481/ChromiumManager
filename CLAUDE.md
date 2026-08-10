@@ -49,6 +49,7 @@ docker build -t chromium-manager .
 | `main.go` | 全部数据结构（Group/Proxy/Profile/FingerprintConfig）、sqids 编解码、路由表、中间件、优雅关闭 |
 | `db.go` | SQLite 建表与 PRAGMA |
 | `handler_group.go` / `handler_profile.go` / `handler_proxy.go` / `handler_cookie.go` | 按资源分文件的 HTTP handler |
+| `auth.go` | 管理面登录页、会话 Cookie、认证中间件与登录限速 |
 | `browser.go` | 运行中实例注册表 `runningProfiles` + `runningMu`、浏览器路径查找、参数切分 |
 | `sse.go` | 向前端广播运行中 profile ID 列表 |
 | `wm_linux.go` / `wm_windows.go` | 构建标签隔离的窗口管理（激活/关闭），Linux 走 xgb + EWMH |
@@ -58,6 +59,8 @@ docker build -t chromium-manager .
 ## 关键设计约定
 
 **ID 混淆.** 数据库用自增 rowid，对外一律是 sqids 字符串（JSON 字段名是 `_id`）。每个 handler 入口 `decodeID()`、出口 `encodeID()`。`decodeID("")` 和 `decodeID("all")` 都返回 0，而 0 在业务上表示"未分组/无代理"——新增查询过滤时要判 `> 0`，别把 0 当有效外键。
+
+**管理面认证.** `AUTH_PASSWORD` 必须显式配置，`AUTH_USERNAME` 默认为 `admin`；未配置密码时 manager 拒绝启动。未登录请求不能读取管理静态资源、CRUD 接口或 SSE，登录后使用内存会话（12 小时绝对有效期）和 `HttpOnly`、`SameSite=Strict` Cookie。agent/CDP 面仍独立使用 `AGENT_TOKEN` Bearer 认证，不继承管理面会话。
 
 **指纹配置整体存一列 JSON.** `FingerprintConfig` 实现了 `sql.Scanner` / `driver.Valuer`（`src/main.go:100-125`），序列化后进 `profiles.fingerprint` 这一个 TEXT 列。**新增指纹字段只需改结构体 + 前端表单，不需要动 schema 或写迁移。**
 

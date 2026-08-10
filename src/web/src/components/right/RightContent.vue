@@ -55,8 +55,8 @@
               <el-button
                 v-if="agentConfig.enabled"
                 size="small"
-                @click.stop="onCopyCDP(scope.row)"
                 title="复制 CDP 地址供 Agent 使用"
+                @click.stop="onCopyCDP(scope.row)"
               >
                 CDP
               </el-button>
@@ -472,6 +472,12 @@ onMounted(() => {
     try {
       const ids = JSON.parse(e.data)
       if (Array.isArray(ids)) runningSet.value = new Set(ids)
+    } catch {}
+  }
+  runningEventSource.onerror = async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/get_agent_config`, { cache: 'no-store' })
+      if (response.status === 401) window.location.replace('/login')
     } catch {}
   }
   // 静默拉取 agent 配置，失败不影响主流程

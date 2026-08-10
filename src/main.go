@@ -174,9 +174,14 @@ type Response[T any] struct {
 
 // writeJSON writes a JSON-encoded response to the response writer.
 func writeJSON(w http.ResponseWriter, resp any) {
+	writeJSONStatus(w, http.StatusOK, resp)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, resp any) {
 	data, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	w.WriteHeader(status)
+	_, _ = w.Write(data)
 }
 
 // withMiddleware wraps the handler.
@@ -219,6 +224,16 @@ func withAgentAuth(next http.Handler) http.Handler {
 }
 
 func main() {
+	authUsername := os.Getenv("AUTH_USERNAME")
+	if authUsername == "" {
+		authUsername = "admin"
+	}
+	authPassword := os.Getenv("AUTH_PASSWORD")
+	if authPassword == "" {
+		log.Fatal("[Auth] AUTH_PASSWORD is required")
+	}
+	adminAuth := newAuthManager(authUsername, authPassword)
+
 	initDB()
 	defer db.Close()
 
@@ -254,13 +269,19 @@ func main() {
 
 	// SSE
 	mux.HandleFunc("GET /events", eventsHandler)
+	mux.HandleFunc("POST /auth/logout", adminAuth.logoutHandler)
 
 	// Static files
 	fsSub, _ := fs.Sub(webFS, "web/dist")
 	mux.Handle("/", http.FileServer(http.FS(fsSub)))
 
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /login", adminAuth.loginPageHandler)
+	adminMux.HandleFunc("POST /auth/login", adminAuth.loginHandler)
+	adminMux.Handle("/", adminAuth.requireAuth(mux))
+
 	servers := []*http.Server{
-		{Addr: listenAddr, Handler: withMiddleware(mux)},
+		{Addr: listenAddr, Handler: withMiddleware(withAdminSecurityHeaders(adminMux))},
 	}
 	log.Printf("[Server] admin listening on %s", listenAddr)
 
