@@ -278,6 +278,7 @@ func main() {
 	adminMux := http.NewServeMux()
 	adminMux.HandleFunc("GET /login", adminAuth.loginPageHandler)
 	adminMux.HandleFunc("POST /auth/login", adminAuth.loginHandler)
+	adminMux.HandleFunc("/auth/check", adminAuth.checkHandler)
 	adminMux.Handle("/", adminAuth.requireAuth(mux))
 
 	servers := []*http.Server{

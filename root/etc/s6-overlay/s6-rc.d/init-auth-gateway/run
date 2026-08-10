@@ -2,33 +2,70 @@
 
 set -euo pipefail
 
-auth_username="${AUTH_USERNAME:-admin}"
 auth_password="${AUTH_PASSWORD:-}"
 nginx_config="${AUTH_GATEWAY_NGINX_CONFIG:-/etc/nginx/sites-available/default}"
-htpasswd_file="${AUTH_GATEWAY_HTPASSWD_FILE:-/etc/nginx/.htpasswd}"
+auth_snippet="${AUTH_GATEWAY_SNIPPET_FILE:-/etc/nginx/auth-gateway.conf}"
 
 if [[ -z "${auth_password}" ]]; then
   echo "[Auth] AUTH_PASSWORD is required" >&2
   exit 1
 fi
 
-# nginx htpasswd 的用户名字段不能包含分隔符或换行。
-if [[ "${auth_username}" == *:* || "${auth_username}" == *$'\r'* || "${auth_username}" == *$'\n'* ]]; then
-  echo "[Auth] AUTH_USERNAME cannot contain colon or newline characters" >&2
-  exit 1
-fi
 if [[ "${auth_password}" == *$'\r'* || "${auth_password}" == *$'\n'* ]]; then
   echo "[Auth] AUTH_PASSWORD cannot contain newline characters" >&2
   exit 1
 fi
 
-# init-nginx 已生成配置；这里为两个 server 块启用入口 Basic Auth。
-password_hash="$(openssl passwd -apr1 -- "${auth_password}")"
-printf '%s:%s\n' "${auth_username}" "${password_hash}" > "${htpasswd_file}"
-sed -i '/#auth_basic/s/#//' "${nginx_config}"
+# 所有 Selkies HTTP 与 WebSocket 请求先向 manager 校验外部浏览器的会话 Cookie。
+cat > "${auth_snippet}" <<'EOF'
+auth_request /__chromium_manager_auth;
+error_page 401 = @chromium_manager_login;
+
+location = /__chromium_manager_auth {
+  internal;
+  auth_request off;
+  proxy_pass http://127.0.0.1:10101/auth/check;
+  proxy_pass_request_body off;
+  proxy_set_header Content-Length "";
+  proxy_set_header Cookie $http_cookie;
+}
+
+location @chromium_manager_login {
+  auth_request off;
+  return 303 /login;
+}
+
+location = /login {
+  auth_request off;
+  proxy_pass http://127.0.0.1:10101;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location = /auth/login {
+  auth_request off;
+  proxy_pass http://127.0.0.1:10101;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location = /auth/logout {
+  auth_request off;
+  proxy_pass http://127.0.0.1:10101;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+EOF
+
+if ! grep -Fq "include ${auth_snippet};" "${nginx_config}"; then
+  sed -i "/^server {/a\\  include ${auth_snippet};" "${nginx_config}"
+fi
 
 if command -v nginx >/dev/null 2>&1; then
   nginx -t
 fi
 
-echo "[Auth] Selkies gateway authentication enabled for ${auth_username}"
+echo "[Auth] Selkies session gateway enabled"

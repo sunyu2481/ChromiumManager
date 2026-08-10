@@ -101,12 +101,11 @@ func (a *authManager) revokeSession(r *http.Request) {
 	a.mu.Unlock()
 }
 
-func (a *authManager) consumeLoginAttempt(remoteAddr string) bool {
-	key := clientAddress(remoteAddr)
+func (a *authManager) consumeLoginAttempt(clientAddr string) bool {
 	now := time.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	attempt := a.attempts[key]
+	attempt := a.attempts[clientAddr]
 	if !attempt.expiresAt.After(now) {
 		attempt = loginAttempt{expiresAt: now.Add(loginAttemptWindow)}
 	}
@@ -114,22 +113,27 @@ func (a *authManager) consumeLoginAttempt(remoteAddr string) bool {
 		return false
 	}
 	attempt.count++
-	a.attempts[key] = attempt
+	a.attempts[clientAddr] = attempt
 	return true
 }
 
-func (a *authManager) clearLoginFailures(remoteAddr string) {
+func (a *authManager) clearLoginFailures(clientAddr string) {
 	a.mu.Lock()
-	delete(a.attempts, clientAddress(remoteAddr))
+	delete(a.attempts, clientAddr)
 	a.mu.Unlock()
 }
 
-func clientAddress(remoteAddr string) string {
-	host, _, err := net.SplitHostPort(remoteAddr)
+func requestClientAddress(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			if forwardedIP := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); forwardedIP != nil {
+				return forwardedIP.String()
+			}
+		}
 		return host
 	}
-	return remoteAddr
+	return r.RemoteAddr
 }
 
 func requestIsHTTPS(r *http.Request) bool {
@@ -181,7 +185,8 @@ func (a *authManager) loginPageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authManager) loginHandler(w http.ResponseWriter, r *http.Request) {
-	if !a.consumeLoginAttempt(r.RemoteAddr) {
+	clientAddr := requestClientAddress(r)
+	if !a.consumeLoginAttempt(clientAddr) {
 		renderLoginPage(w, http.StatusTooManyRequests, "登录尝试次数过多，请稍后再试", "")
 		return
 	}
@@ -202,9 +207,17 @@ func (a *authManager) loginHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusInternalServerError, Response[any]{Code: 500, Message: "无法创建登录会话"})
 		return
 	}
-	a.clearLoginFailures(r.RemoteAddr)
+	a.clearLoginFailures(clientAddr)
 	setSessionCookie(w, r, token)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (a *authManager) checkHandler(w http.ResponseWriter, r *http.Request) {
+	if !a.authenticated(r) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *authManager) logoutHandler(w http.ResponseWriter, r *http.Request) {

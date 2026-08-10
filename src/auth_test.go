@@ -20,16 +20,24 @@ func newAuthTestHandler(auth *authManager) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /login", auth.loginPageHandler)
 	mux.HandleFunc("POST /auth/login", auth.loginHandler)
+	mux.HandleFunc("/auth/check", auth.checkHandler)
 	mux.Handle("/", auth.requireAuth(protected))
 	return withAdminSecurityHeaders(mux)
 }
 
 func postLogin(t *testing.T, handler http.Handler, username, password string) *httptest.ResponseRecorder {
+	return postLoginFrom(t, handler, username, password, "192.0.2.10:4321", "")
+}
+
+func postLoginFrom(t *testing.T, handler http.Handler, username, password, remoteAddr, realIP string) *httptest.ResponseRecorder {
 	t.Helper()
 	form := url.Values{"username": {username}, "password": {password}}
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.RemoteAddr = "192.0.2.10:4321"
+	req.RemoteAddr = remoteAddr
+	if realIP != "" {
+		req.Header.Set("X-Real-IP", realIP)
+	}
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	return res
@@ -160,5 +168,57 @@ func TestAuthRateLimitIsAtomic(t *testing.T) {
 	}
 	if unauthorized != maxLoginAttempts || rateLimited != requests-maxLoginAttempts {
 		t.Fatalf("unauthorized = %d, rate limited = %d", unauthorized, rateLimited)
+	}
+}
+
+func TestAuthUsesGatewayClientAddressForRateLimit(t *testing.T) {
+	handler := newAuthTestHandler(newAuthManager("admin", "correct-password"))
+	for i := 0; i < maxLoginAttempts; i++ {
+		res := postLoginFrom(t, handler, "admin", "wrong-password", "127.0.0.1:4321", "192.0.2.10")
+		if res.Code != http.StatusUnauthorized {
+			t.Fatalf("failed login %d response = %d", i+1, res.Code)
+		}
+	}
+	res := postLoginFrom(t, handler, "admin", "correct-password", "127.0.0.1:4321", "192.0.2.11")
+	if res.Code != http.StatusSeeOther {
+		t.Fatalf("independent gateway client response = %d", res.Code)
+	}
+}
+
+func TestAuthDoesNotTrustForwardedIPFromNonLoopback(t *testing.T) {
+	handler := newAuthTestHandler(newAuthManager("admin", "correct-password"))
+	for i := 0; i < maxLoginAttempts; i++ {
+		res := postLoginFrom(t, handler, "admin", "wrong-password", "192.0.2.20:4321", "192.0.2.10")
+		if res.Code != http.StatusUnauthorized {
+			t.Fatalf("failed login %d response = %d", i+1, res.Code)
+		}
+	}
+	res := postLoginFrom(t, handler, "admin", "correct-password", "192.0.2.20:4321", "192.0.2.11")
+	if res.Code != http.StatusTooManyRequests {
+		t.Fatalf("spoofed forwarded client response = %d", res.Code)
+	}
+}
+
+func TestAuthCheck(t *testing.T) {
+	auth := newAuthManager("admin", "correct-password")
+	handler := newAuthTestHandler(auth)
+
+	unauthenticated := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticated, httptest.NewRequest(http.MethodGet, "/auth/check", nil))
+	if unauthenticated.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated check response = %d", unauthenticated.Code)
+	}
+
+	login := postLogin(t, handler, "admin", "correct-password")
+	cookies := login.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("login cookies = %d, want 1", len(cookies))
+	}
+	checkReq := httptest.NewRequest(http.MethodGet, "/auth/check", nil)
+	checkReq.AddCookie(cookies[0])
+	authenticated := httptest.NewRecorder()
+	handler.ServeHTTP(authenticated, checkReq)
+	if authenticated.Code != http.StatusNoContent {
+		t.Fatalf("authenticated check response = %d", authenticated.Code)
 	}
 }
