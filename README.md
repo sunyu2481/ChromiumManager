@@ -57,6 +57,7 @@
 ### Docker Compose
 
 启动前请通过宿主机环境变量或 Compose 的 `.env` 文件设置高强度 `AUTH_PASSWORD`。
+镜像会自动用同一组凭据保护公网 Selkies 入口和内部管理面：每个外部浏览器会话先通过 HTTP Basic Auth，进入桌面后再由管理面会话校验。
 
 ```yaml
 services:
@@ -225,11 +226,13 @@ curl -X POST http://chromium-manager:10102/agent/release \
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `AUTH_USERNAME` | `admin` | 管理界面登录用户名 |
-| `AUTH_PASSWORD` | 无（必填） | 管理界面登录密码；未设置时 manager 会拒绝启动 |
+| `AUTH_USERNAME` | `admin` | 入口与管理面登录用户名 |
+| `AUTH_PASSWORD` | 无（必填） | 入口与管理面登录密码；未设置时容器初始化会拒绝继续 |
 | `AGENT_ADDR` | `0.0.0.0:10102` | Agent 面监听地址；设为空值可完全禁用 |
 | `AGENT_TOKEN` | 空（不鉴权） | 非空时 agent 接口要求 `Authorization: Bearer <token>` |
 | `LISTEN_ADDR` | `127.0.0.1:10101` | 管理面监听地址（管理 UI 与 CRUD，默认不出容器） |
+
+镜像会在容器启动时用 `AUTH_USERNAME` 与 `AUTH_PASSWORD` 自动配置 Selkies 入口认证，无需重复设置 `CUSTOM_USER` / `PASSWORD`。Basic Auth 必须运行在 HTTPS 后；公网部署建议再使用带登录限速和 MFA 的反向代理，且不要将 `10102` 发布到公网。
 
 ---
 

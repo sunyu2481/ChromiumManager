@@ -60,7 +60,7 @@ docker build -t chromium-manager .
 
 **ID 混淆.** 数据库用自增 rowid，对外一律是 sqids 字符串（JSON 字段名是 `_id`）。每个 handler 入口 `decodeID()`、出口 `encodeID()`。`decodeID("")` 和 `decodeID("all")` 都返回 0，而 0 在业务上表示"未分组/无代理"——新增查询过滤时要判 `> 0`，别把 0 当有效外键。
 
-**管理面认证.** `AUTH_PASSWORD` 必须显式配置，`AUTH_USERNAME` 默认为 `admin`；未配置密码时 manager 拒绝启动。未登录请求不能读取管理静态资源、CRUD 接口或 SSE，登录后使用内存会话（12 小时绝对有效期）和 `HttpOnly`、`SameSite=Strict` Cookie。agent/CDP 面仍独立使用 `AGENT_TOKEN` Bearer 认证，不继承管理面会话。
+**双层认证.** `AUTH_PASSWORD` 必须显式配置，`AUTH_USERNAME` 默认为 `admin`；未配置密码时容器初始化和 manager 都会拒绝启动。`init-auth-gateway` 在基础镜像生成 nginx 配置后启用 Selkies 入口 Basic Auth，确保每个外部浏览器会话独立验证。管理面仍使用 12 小时内存会话和 `HttpOnly`、`SameSite=Strict` Cookie 保护静态资源、CRUD 与 SSE。agent/CDP 面独立使用 `AGENT_TOKEN` Bearer 认证，不继承上述会话。
 
 **指纹配置整体存一列 JSON.** `FingerprintConfig` 实现了 `sql.Scanner` / `driver.Valuer`（`src/main.go:100-125`），序列化后进 `profiles.fingerprint` 这一个 TEXT 列。**新增指纹字段只需改结构体 + 前端表单，不需要动 schema 或写迁移。**
 
