@@ -30,6 +30,13 @@ type runningProfile struct {
 	cdpClients atomic.Int32
 }
 
+// profileStartState 用于合并同一 profile 的并发启动请求。
+type profileStartState struct {
+	done chan struct{}
+	rp   *runningProfile
+	err  error
+}
+
 // cdpPort 返回已就绪的调试端口，未就绪时返回 0。
 func (rp *runningProfile) cdpPort() int {
 	runningMu.Lock()
@@ -38,8 +45,10 @@ func (rp *runningProfile) cdpPort() int {
 }
 
 var (
-	runningMu       sync.Mutex
-	runningProfiles = map[string]*runningProfile{}
+	runningMu        sync.Mutex
+	runningProfiles  = map[string]*runningProfile{}
+	startMu          sync.Mutex
+	startingProfiles = map[string]*profileStartState{}
 )
 
 // getRunningIDs returns a snapshot of currently running profile IDs.
@@ -210,9 +219,37 @@ func startProfile(idStr string) (rp *runningProfile, started bool, err error) {
 		return existing, false, nil
 	}
 
+	startMu.Lock()
+	if existing, ok := getRunning(idStr); ok {
+		startMu.Unlock()
+		return existing, false, nil
+	}
+	if pending, ok := startingProfiles[idStr]; ok {
+		startMu.Unlock()
+		<-pending.done
+		return pending.rp, false, pending.err
+	}
+	pending := &profileStartState{done: make(chan struct{})}
+	startingProfiles[idStr] = pending
+	startMu.Unlock()
+
+	defer func() {
+		startMu.Lock()
+		pending.rp = rp
+		pending.err = err
+		delete(startingProfiles, idStr)
+		close(pending.done)
+		startMu.Unlock()
+	}()
+
+	rp, err = startProfileOnce(idStr)
+	return rp, err == nil, err
+}
+
+func startProfileOnce(idStr string) (rp *runningProfile, err error) {
 	rawID := decodeID(idStr)
 	if rawID <= 0 {
-		return nil, false, fmt.Errorf("invalid profile id")
+		return nil, fmt.Errorf("invalid profile id")
 	}
 
 	var p Profile
@@ -220,7 +257,7 @@ func startProfile(idStr string) (rp *runningProfile, started bool, err error) {
 	var cookieStr string
 	if err := db.QueryRow("SELECT id, name, proxy, args, fingerprint, cookie FROM profiles WHERE id=?", rawID).
 		Scan(&rawID, &p.Name, &rawProxy, &p.Args, &p.Fingerprint, &cookieStr); err != nil {
-		return nil, false, fmt.Errorf("profile not found: %w", err)
+		return nil, fmt.Errorf("profile not found: %w", err)
 	}
 	p.ID = idStr
 
@@ -251,7 +288,7 @@ func startProfile(idStr string) (rp *runningProfile, started bool, err error) {
 	proxy := getProxyInfo(rawProxy)
 	cmd := exec.Command(findBrowserPath(), buildLaunchArgs(&p, proxy, absUserDataDir)...)
 	if err := cmd.Start(); err != nil {
-		return nil, false, fmt.Errorf("failed to launch: %w", err)
+		return nil, fmt.Errorf("failed to launch: %w", err)
 	}
 
 	done := make(chan struct{})
@@ -302,5 +339,5 @@ func startProfile(idStr string) (rp *runningProfile, started bool, err error) {
 		broadcastRunning()
 	}()
 
-	return rp, true, nil
+	return rp, nil
 }

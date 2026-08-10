@@ -25,7 +25,14 @@ const (
 
 	// cdpPollInterval 是轮询 DevToolsActivePort 的间隔。
 	cdpPollInterval = 100 * time.Millisecond
+
+	// CDP HTTP 请求只需要传输小型协议消息；WebSocket 升级请求不受此限制。
+	cdpMaxRequestBody                    = 1 << 20
+	cdpMaxJSONResponse                   = 4 << 20
+	defaultMaxCDPClientsPerProfile int32 = 32
 )
+
+var maxCDPClientsPerProfile = defaultMaxCDPClientsPerProfile
 
 // waitDevToolsPort 轮询 user-data-dir 下的 DevToolsActivePort，返回 Chromium 自选的调试端口。
 // abort 关闭（浏览器进程已退出）时立即放弃等待。
@@ -89,6 +96,18 @@ func cdpProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "devtools endpoint not ready", http.StatusServiceUnavailable)
 		return
 	}
+	if !tryAcquireCDPClient(rp) {
+		http.Error(w, "too many cdp clients", http.StatusTooManyRequests)
+		return
+	}
+	defer rp.cdpClients.Add(-1)
+	if !isWebSocketUpgrade(r) {
+		controller := http.NewResponseController(w)
+		if err := controller.SetReadDeadline(time.Now().Add(10 * time.Second)); err == nil {
+			defer func() { _ = controller.SetReadDeadline(time.Time{}) }()
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, cdpMaxRequestBody)
+	}
 
 	// 剥掉 /cdp/{id} 前缀，其余原样转发给 Chromium
 	prefix := "/cdp/" + id
@@ -125,18 +144,45 @@ func cdpProxyHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	rp.cdpClients.Add(1)
-	defer rp.cdpClients.Add(-1)
 	proxy.ServeHTTP(w, r)
+}
+
+func tryAcquireCDPClient(rp *runningProfile) bool {
+	for {
+		current := rp.cdpClients.Load()
+		if current >= maxCDPClientsPerProfile {
+			return false
+		}
+		if rp.cdpClients.CompareAndSwap(current, current+1) {
+			return true
+		}
+	}
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	if r.Method != http.MethodGet || !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for _, value := range r.Header.Values("Connection") {
+		for _, token := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), "upgrade") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // rewriteCDPEndpoints 把响应体中指向 Chromium 本地调试端口的地址替换为本代理的对外地址，
 // 覆盖 webSocketDebuggerUrl 与 devtoolsFrontendUrl 两类字段。
 func rewriteCDPEndpoints(resp *http.Response, port int, publicBase string) error {
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, cdpMaxJSONResponse+1))
 	resp.Body.Close()
 	if err != nil {
 		return err
+	}
+	if len(body) > cdpMaxJSONResponse {
+		return fmt.Errorf("cdp response exceeds %d bytes", cdpMaxJSONResponse)
 	}
 
 	local := strconv.Itoa(port)

@@ -137,6 +137,57 @@ func TestRewriteCDPEndpoints_ReplacesAll(t *testing.T) {
 	}
 }
 
+func TestRewriteCDPEndpoints_RejectsOversizedResponse(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{"Content-Type": []string{"application/json"}},
+		Body:   io.NopCloser(strings.NewReader(strings.Repeat("x", cdpMaxJSONResponse+1))),
+	}
+	if err := rewriteCDPEndpoints(resp, 12345, "localhost/cdp/test"); err == nil {
+		t.Fatal("expected oversized response error")
+	}
+}
+
+func TestTryAcquireCDPClientLimit(t *testing.T) {
+	rp := &runningProfile{}
+	for i := int32(0); i < maxCDPClientsPerProfile; i++ {
+		if !tryAcquireCDPClient(rp) {
+			t.Fatalf("client %d unexpectedly rejected", i+1)
+		}
+	}
+	if tryAcquireCDPClient(rp) {
+		t.Fatal("client accepted after reaching the limit")
+	}
+	if got := rp.cdpClients.Load(); got != maxCDPClientsPerProfile {
+		t.Fatalf("client count = %d, want %d", got, maxCDPClientsPerProfile)
+	}
+}
+
+func TestIsWebSocketUpgradeRequiresHandshakeHeaders(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		upgrade    string
+		connection string
+		want       bool
+	}{
+		{name: "valid", method: http.MethodGet, upgrade: "websocket", connection: "keep-alive, Upgrade", want: true},
+		{name: "missing connection", method: http.MethodGet, upgrade: "websocket", want: false},
+		{name: "wrong method", method: http.MethodPost, upgrade: "websocket", connection: "Upgrade", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/cdp/id/path", nil)
+			req.Header.Set("Upgrade", tt.upgrade)
+			if tt.connection != "" {
+				req.Header.Set("Connection", tt.connection)
+			}
+			if got := isWebSocketUpgrade(req); got != tt.want {
+				t.Fatalf("isWebSocketUpgrade() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // ---- cdpProxyHandler（整合测试）----
 // 用 httptest 伪造一个 Chrome DevTools HTTP/WebSocket 服务，
 // 注入到 runningProfiles 后通过 cdpProxyHandler 代理访问，
@@ -278,6 +329,7 @@ func TestCDPProxyHandler_WebSocketUpgrade(t *testing.T) {
 func dialTCP(addr string) (net.Conn, error) {
 	return net.Dial("tcp", addr)
 }
+
 // 使用 net.Dial 而非 http.Transport，以便在收到 101 后继续读写同一 TCP 连接。
 func dialHTTPUpgrade(addr, path string) (io.ReadWriteCloser, error) {
 	conn, err := dialTCP(addr)

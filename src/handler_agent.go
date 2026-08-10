@@ -3,10 +3,55 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
 )
+
+const (
+	// Agent 请求体只包含 profile ID、名称和少量控制字段。
+	agentMaxRequestBody        = 16 << 10
+	defaultAgentOperationLimit = 32
+	agentBodyReadTimeout       = 10 * time.Second
+)
+
+var (
+	agentOperationLimit = defaultAgentOperationLimit
+	agentOperationSlots chan struct{}
+)
+
+// beginAgentOperation 限制会占用数据库或等待浏览器的 Agent 请求数量。
+func beginAgentOperation(w http.ResponseWriter) func() {
+	select {
+	case agentOperationSlots <- struct{}{}:
+		return func() { <-agentOperationSlots }
+	default:
+		writeJSONStatus(w, http.StatusTooManyRequests, Response[any]{
+			Code:    http.StatusTooManyRequests,
+			Message: "too many agent requests",
+		})
+		return nil
+	}
+}
+
+func decodeAgentJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	controller := http.NewResponseController(w)
+	if err := controller.SetReadDeadline(time.Now().Add(agentBodyReadTimeout)); err == nil {
+		defer func() { _ = controller.SetReadDeadline(time.Time{}) }()
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, agentMaxRequestBody)
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(dst); err != nil {
+		writeJSON(w, Response[any]{Code: 400, Message: "invalid request body"})
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeJSON(w, Response[any]{Code: 400, Message: "invalid request body"})
+		return false
+	}
+	return true
+}
 
 // agentBrowserInfo 是 /agent/browsers 单条记录。
 type agentBrowserInfo struct {
@@ -21,6 +66,12 @@ type agentBrowserInfo struct {
 
 // agentBrowsers 列出全部 profile 及其运行与 CDP 就绪状态。
 func agentBrowsers(w http.ResponseWriter, r *http.Request) {
+	release := beginAgentOperation(w)
+	if release == nil {
+		return
+	}
+	defer release()
+
 	rows, err := db.Query(`SELECT id, name, group_id FROM profiles ORDER BY sort DESC, created_at DESC`)
 	if err != nil {
 		writeJSON(w, Response[any]{Code: 500, Message: err.Error()})
@@ -83,8 +134,12 @@ const acquireCDPTimeout = 20 * time.Second
 // agentAcquire 按需启动 profile 并等待 CDP 就绪，返回可直接连接的 CDP 地址。
 func agentAcquire(w http.ResponseWriter, r *http.Request) {
 	var req acquireRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, Response[any]{Code: 400, Message: "invalid request body"})
+	release := beginAgentOperation(w)
+	if release == nil {
+		return
+	}
+	defer release()
+	if !decodeAgentJSON(w, r, &req) {
 		return
 	}
 
@@ -169,8 +224,12 @@ type releaseRequest struct {
 // agentRelease 释放对 profile 的占用。
 func agentRelease(w http.ResponseWriter, r *http.Request) {
 	var req releaseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, Response[any]{Code: 400, Message: "invalid request body"})
+	release := beginAgentOperation(w)
+	if release == nil {
+		return
+	}
+	defer release()
+	if !decodeAgentJSON(w, r, &req) {
 		return
 	}
 	if req.Stop {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -48,6 +49,32 @@ func agentEnabled() bool {
 	return agentAddr != ""
 }
 
+func readPositiveEnvInt(name string, fallback int) int {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		log.Printf("[Config] %s must be a positive integer; using default %d", name, fallback)
+		return fallback
+	}
+	return value
+}
+
+func readPositiveEnvInt32(name string, fallback int32) int32 {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || value <= 0 {
+		log.Printf("[Config] %s must be a positive 32-bit integer; using default %d", name, fallback)
+		return fallback
+	}
+	return int32(value)
+}
+
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 
@@ -63,6 +90,11 @@ func init() {
 	if agentPublicHost == "" {
 		agentPublicHost, _ = os.Hostname()
 	}
+	agentOperationLimit = readPositiveEnvInt("AGENT_OPERATION_LIMIT", defaultAgentOperationLimit)
+	agentOperationSlots = make(chan struct{}, agentOperationLimit)
+	maxCDPClientsPerProfile = readPositiveEnvInt32(
+		"CDP_MAX_CLIENTS_PER_PROFILE", defaultMaxCDPClientsPerProfile,
+	)
 
 	var err error
 	sq, err = sqids.New(sqids.Options{MinLength: 8})
@@ -300,6 +332,9 @@ func main() {
 			Handler: withMiddleware(withAgentAuth(agentMux)),
 			// CDP 会话是长连接，禁用写超时，交给客户端与浏览器自行断开
 			ReadHeaderTimeout: 10 * time.Second,
+			// 限制空闲 keep-alive 和异常大的请求头；升级后的 WebSocket 不受 IdleTimeout 影响。
+			IdleTimeout:    60 * time.Second,
+			MaxHeaderBytes: 16 << 10,
 		})
 		authMode := "no auth"
 		if agentToken != "" {

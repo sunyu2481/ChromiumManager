@@ -230,6 +230,8 @@ curl -X POST http://chromium-manager:10102/agent/release \
 | `AUTH_PASSWORD` | 无（必填） | 公网入口登录密码；未设置时容器初始化会拒绝继续 |
 | `AGENT_ADDR` | `0.0.0.0:10102` | Agent 面监听地址；设为空值可完全禁用 |
 | `AGENT_TOKEN` | 空（不鉴权） | 非空时 agent 接口要求 `Authorization: Bearer <token>` |
+| `AGENT_OPERATION_LIMIT` | `32` | Agent 同时处理的 `browsers/acquire/release` 请求数 |
+| `CDP_MAX_CLIENTS_PER_PROFILE` | `32` | 单个 profile 同时允许的 CDP 连接数 |
 | `LISTEN_ADDR` | `127.0.0.1:10101` | 管理面监听地址（管理 UI 与 CRUD）；服务只接受 loopback 请求 |
 
 Selkies 页面、WebSocket 和文件入口均通过 nginx `auth_request` 校验 Go 会话，不使用基础镜像的 Basic Auth。公网部署必须使用 HTTPS，建议再使用支持 MFA 的反向代理，且不要将 `10102` 发布到公网。
