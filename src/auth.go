@@ -123,15 +123,23 @@ func (a *authManager) clearLoginFailures(clientAddr string) {
 	a.mu.Unlock()
 }
 
-func requestClientAddress(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+func requestPeerIP(remoteAddr string) net.IP {
+	host, _, err := net.SplitHostPort(remoteAddr)
 	if err == nil {
-		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return net.ParseIP(host)
+	}
+	return net.ParseIP(remoteAddr)
+}
+
+func requestClientAddress(r *http.Request) string {
+	peerIP := requestPeerIP(r.RemoteAddr)
+	if peerIP != nil {
+		if peerIP.IsLoopback() {
 			if forwardedIP := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); forwardedIP != nil {
 				return forwardedIP.String()
 			}
 		}
-		return host
+		return peerIP.String()
 	}
 	return r.RemoteAddr
 }
@@ -162,17 +170,14 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *authManager) requireAuth(next http.Handler) http.Handler {
+func requireLoopback(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.authenticated(r) {
-			next.ServeHTTP(w, r)
+		peerIP := requestPeerIP(r.RemoteAddr)
+		if peerIP == nil || !peerIP.IsLoopback() {
+			http.Error(w, "管理面仅允许容器内部访问", http.StatusForbidden)
 			return
 		}
-		if r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html") {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-		writeJSONStatus(w, http.StatusUnauthorized, Response[any]{Code: 401, Message: "请先登录"})
+		next.ServeHTTP(w, r)
 	})
 }
 

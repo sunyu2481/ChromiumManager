@@ -8,11 +8,6 @@
             <el-icon><Plus /></el-icon>
           </button>
         </el-tooltip>
-        <el-tooltip content="退出登录" placement="bottom">
-          <button type="button" class="icon-button" aria-label="退出登录" @click="onLogoutClick">
-            <el-icon><SwitchButton /></el-icon>
-          </button>
-        </el-tooltip>
       </div>
     </div>
     <Content ref="contentRef" />
@@ -21,8 +16,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { Plus, SwitchButton } from '@element-plus/icons-vue'
-import { logout } from '@/api'
+import { Plus } from '@element-plus/icons-vue'
 import Content from './LeftContent.vue'
 
 let contentRef = ref(null)
@@ -30,13 +24,6 @@ const onAddClick = () => {
   contentRef.value.onAddClick()
 }
 
-const onLogoutClick = async () => {
-  try {
-    await logout()
-  } finally {
-    window.location.replace('/login')
-  }
-}
 </script>
 
 <style lang="scss" scoped>

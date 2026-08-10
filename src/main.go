@@ -278,11 +278,11 @@ func main() {
 	adminMux := http.NewServeMux()
 	adminMux.HandleFunc("GET /login", adminAuth.loginPageHandler)
 	adminMux.HandleFunc("POST /auth/login", adminAuth.loginHandler)
-	adminMux.HandleFunc("/auth/check", adminAuth.checkHandler)
-	adminMux.Handle("/", adminAuth.requireAuth(mux))
+	adminMux.HandleFunc("GET /auth/check", adminAuth.checkHandler)
+	adminMux.Handle("/", mux)
 
 	servers := []*http.Server{
-		{Addr: listenAddr, Handler: withMiddleware(withAdminSecurityHeaders(adminMux))},
+		{Addr: listenAddr, Handler: withMiddleware(withAdminSecurityHeaders(requireLoopback(adminMux)))},
 	}
 	log.Printf("[Server] admin listening on %s", listenAddr)
 

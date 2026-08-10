@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,17 +10,14 @@ import (
 )
 
 func newAuthTestHandler(auth *authManager) http.Handler {
-	protected := http.NewServeMux()
-	protected.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	protected.HandleFunc("POST /auth/logout", auth.logoutHandler)
-
-	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/logout", auth.logoutHandler)
 	mux.HandleFunc("GET /login", auth.loginPageHandler)
 	mux.HandleFunc("POST /auth/login", auth.loginHandler)
-	mux.HandleFunc("/auth/check", auth.checkHandler)
-	mux.Handle("/", auth.requireAuth(protected))
+	mux.HandleFunc("GET /auth/check", auth.checkHandler)
 	return withAdminSecurityHeaders(mux)
 }
 
@@ -43,27 +39,27 @@ func postLoginFrom(t *testing.T, handler http.Handler, username, password, remot
 	return res
 }
 
-func TestAuthRequiresLoginForPageAndAPI(t *testing.T) {
-	handler := newAuthTestHandler(newAuthManager("admin", "correct-password"))
+func TestManagementHandlerOnlyAllowsLoopback(t *testing.T) {
+	protected := http.NewServeMux()
+	protected.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := requireLoopback(protected)
 
-	pageReq := httptest.NewRequest(http.MethodGet, "/", nil)
-	pageReq.Header.Set("Accept", "text/html")
-	pageRes := httptest.NewRecorder()
-	handler.ServeHTTP(pageRes, pageReq)
-	if pageRes.Code != http.StatusSeeOther || pageRes.Header().Get("Location") != "/login" {
-		t.Fatalf("page response = %d, location %q", pageRes.Code, pageRes.Header().Get("Location"))
+	remote := httptest.NewRequest(http.MethodGet, "/", nil)
+	remote.RemoteAddr = "192.0.2.20:4321"
+	remoteRes := httptest.NewRecorder()
+	handler.ServeHTTP(remoteRes, remote)
+	if remoteRes.Code != http.StatusForbidden {
+		t.Fatalf("remote management response = %d, want %d", remoteRes.Code, http.StatusForbidden)
 	}
 
-	apiReq := httptest.NewRequest(http.MethodGet, "/get_groups", nil)
-	apiReq.Header.Set("Accept", "application/json")
-	apiRes := httptest.NewRecorder()
-	handler.ServeHTTP(apiRes, apiReq)
-	if apiRes.Code != http.StatusUnauthorized {
-		t.Fatalf("API response = %d, want %d", apiRes.Code, http.StatusUnauthorized)
-	}
-	body, _ := io.ReadAll(apiRes.Body)
-	if !strings.Contains(string(body), `"code":401`) {
-		t.Fatalf("unexpected API body: %s", body)
+	local := httptest.NewRequest(http.MethodGet, "/", nil)
+	local.RemoteAddr = "127.0.0.1:4321"
+	localRes := httptest.NewRecorder()
+	handler.ServeHTTP(localRes, local)
+	if localRes.Code != http.StatusOK {
+		t.Fatalf("loopback management response = %d, want %d", localRes.Code, http.StatusOK)
 	}
 }
 
@@ -89,11 +85,10 @@ func TestAuthLoginAndLogout(t *testing.T) {
 	}
 
 	pageReq := httptest.NewRequest(http.MethodGet, "/", nil)
-	pageReq.AddCookie(sessionCookie)
 	pageRes := httptest.NewRecorder()
 	handler.ServeHTTP(pageRes, pageReq)
 	if pageRes.Code != http.StatusOK {
-		t.Fatalf("authenticated page response = %d", pageRes.Code)
+		t.Fatalf("internal page response = %d", pageRes.Code)
 	}
 
 	logoutReq := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
@@ -104,7 +99,7 @@ func TestAuthLoginAndLogout(t *testing.T) {
 		t.Fatalf("logout response = %d", logoutRes.Code)
 	}
 
-	retryReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	retryReq := httptest.NewRequest(http.MethodGet, "/auth/check", nil)
 	retryReq.AddCookie(sessionCookie)
 	retryRes := httptest.NewRecorder()
 	handler.ServeHTTP(retryRes, retryReq)

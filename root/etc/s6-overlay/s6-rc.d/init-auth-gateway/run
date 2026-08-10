@@ -20,6 +20,7 @@ fi
 cat > "${auth_snippet}" <<'EOF'
 auth_request /__chromium_manager_auth;
 error_page 401 = @chromium_manager_login;
+absolute_redirect off;
 
 location = /__chromium_manager_auth {
   internal;

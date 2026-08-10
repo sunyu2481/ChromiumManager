@@ -57,8 +57,7 @@
 ### Docker Compose
 
 启动前请通过宿主机环境变量或 Compose 的 `.env` 文件设置高强度 `AUTH_PASSWORD`。
-镜像会自动用同一登录页保护公网 Selkies 入口和内部管理面。入口会话 Cookie 保存在外部浏览器中，因此新浏览器或无痕窗口必须单独登录。
-入口会话与容器内管理 Chromium 的会话彼此隔离；容器重启后的首次访问可能需要分别登录一次，后续外部浏览器仍各自独立验证。
+镜像会自动保护公网 Selkies 入口，外部浏览器登录一次即可进入远程桌面。入口会话 Cookie 保存在外部浏览器中，因此新浏览器或无痕窗口必须单独登录；容器内管理 Chromium 通过 loopback 访问，不会再次弹出登录页。
 
 ```yaml
 services:
@@ -227,11 +226,11 @@ curl -X POST http://chromium-manager:10102/agent/release \
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `AUTH_USERNAME` | `admin` | 入口与管理面登录用户名 |
-| `AUTH_PASSWORD` | 无（必填） | 入口与管理面登录密码；未设置时容器初始化会拒绝继续 |
+| `AUTH_USERNAME` | `admin` | 公网入口登录用户名 |
+| `AUTH_PASSWORD` | 无（必填） | 公网入口登录密码；未设置时容器初始化会拒绝继续 |
 | `AGENT_ADDR` | `0.0.0.0:10102` | Agent 面监听地址；设为空值可完全禁用 |
 | `AGENT_TOKEN` | 空（不鉴权） | 非空时 agent 接口要求 `Authorization: Bearer <token>` |
-| `LISTEN_ADDR` | `127.0.0.1:10101` | 管理面监听地址（管理 UI 与 CRUD，默认不出容器） |
+| `LISTEN_ADDR` | `127.0.0.1:10101` | 管理面监听地址（管理 UI 与 CRUD）；服务只接受 loopback 请求 |
 
 Selkies 页面、WebSocket 和文件入口均通过 nginx `auth_request` 校验 Go 会话，不使用基础镜像的 Basic Auth。公网部署必须使用 HTTPS，建议再使用支持 MFA 的反向代理，且不要将 `10102` 发布到公网。
 
