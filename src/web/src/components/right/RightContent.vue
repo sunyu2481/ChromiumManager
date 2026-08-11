@@ -9,11 +9,43 @@
         class="table"
         @row-click="onItemClick"
       >
-        <el-table-column prop="name" label="名称" width="auto" class-name="left"></el-table-column>
-        <el-table-column prop="proxyName" label="代理" width="auto"></el-table-column>
-        <el-table-column prop="ip" label="IP" width="120"></el-table-column>
-        <el-table-column prop="lang" label="语言" width="80"></el-table-column>
-        <el-table-column prop="timezone" label="时区" width="140"></el-table-column>
+        <el-table-column prop="name" label="名称" width="auto" class-name="left">
+          <template #default="scope">
+            <span class="name-cell">
+              <!-- 状态点：运行中为主色实心并带呼吸光圈，停止为中性描边 -->
+              <span
+                class="status-dot"
+                :class="{ running: runningSet.has(scope.row._id) }"
+                :title="runningSet.has(scope.row._id) ? '运行中' : '已停止'"
+              ></span>
+              <span class="name-text">{{ scope.row.name }}</span>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="proxyName" label="代理" width="auto" show-overflow-tooltip>
+          <template #default="scope">
+            <span v-if="scope.row.proxyName" class="tag">{{ scope.row.proxyName }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="ip" label="IP" width="130">
+          <template #default="scope">
+            <span v-if="scope.row.ip" class="mono">{{ scope.row.ip }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="lang" label="语言" width="80">
+          <template #default="scope">
+            <span v-if="scope.row.lang">{{ scope.row.lang }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="timezone" label="时区" width="150" show-overflow-tooltip>
+          <template #default="scope">
+            <span v-if="scope.row.timezone">{{ scope.row.timezone }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="位置" width="60" align="center">
           <template #default="scope">
             <el-icon
@@ -25,56 +57,72 @@
             </el-icon>
           </template>
         </el-table-column>
-        <el-table-column label="Cookie" width="80" align="center">
+        <el-table-column label="Cookie" width="86" align="center">
           <template #default="scope">
-            <el-icon
-              :class="['cookie-icon', { disabled: runningSet.has(scope.row._id) }]"
-              @click.stop="!runningSet.has(scope.row._id) && onCookieImport(scope.row)"
+            <el-tooltip
+              :content="runningSet.has(scope.row._id) ? '运行中无法导入' : '导入 Cookie'"
+              placement="top"
             >
-              <Upload />
-            </el-icon>
-            <el-icon
-              :class="['cookie-icon', { disabled: runningSet.has(scope.row._id) }]"
-              @click.stop="!runningSet.has(scope.row._id) && onCookieExport(scope.row)"
+              <el-icon
+                :class="['cookie-icon', { disabled: runningSet.has(scope.row._id) }]"
+                @click.stop="!runningSet.has(scope.row._id) && onCookieImport(scope.row)"
+              >
+                <Upload />
+              </el-icon>
+            </el-tooltip>
+            <el-tooltip
+              :content="runningSet.has(scope.row._id) ? '运行中无法导出' : '导出 Cookie 到剪贴板'"
+              placement="top"
             >
-              <Download />
-            </el-icon>
+              <el-icon
+                :class="['cookie-icon', { disabled: runningSet.has(scope.row._id) }]"
+                @click.stop="!runningSet.has(scope.row._id) && onCookieExport(scope.row)"
+              >
+                <Download />
+              </el-icon>
+            </el-tooltip>
           </template>
         </el-table-column>
         <!-- 运行中要容纳 激活/关闭/编辑/CDP 四个按钮，宽度按最宽分支预留 -->
-        <el-table-column fixed="right" label="操作" width="260">
+        <el-table-column fixed="right" label="操作" width="252" class-name="ops">
           <template #default="scope">
-            <template v-if="runningSet.has(scope.row._id)">
-              <el-button type="primary" size="small" @click.stop="onShowClick(scope.row)">
-                激活
-              </el-button>
-              <el-button type="danger" size="small" @click.stop="onStopClick(scope.row)">
-                关闭
-              </el-button>
-              <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
-              <el-button
-                v-if="agentConfig.enabled"
-                size="small"
-                title="复制 CDP 地址供 Agent 使用"
-                @click.stop="onCopyCDP(scope.row)"
-              >
-                CDP
-              </el-button>
-            </template>
-            <template v-else>
-              <el-button type="primary" size="small" @click.stop="onLaunchClick(scope.row)">
-                启动
-              </el-button>
-              <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
-              <el-dropdown trigger="click" @command="(cmd) => onMoreCommand(cmd, scope.row)">
-                <el-button size="small" @click.stop>更多</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="delete" class="delete-item">删除</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </template>
+            <div class="ops-cell">
+              <template v-if="runningSet.has(scope.row._id)">
+                <el-button type="primary" size="small" @click.stop="onShowClick(scope.row)">
+                  激活
+                </el-button>
+                <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
+                <el-dropdown trigger="click" @command="(cmd) => onMoreCommand(cmd, scope.row)">
+                  <el-button size="small" :icon="MoreFilled" @click.stop></el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item v-if="agentConfig.enabled" command="cdp">
+                        复制 CDP 地址
+                      </el-dropdown-item>
+                      <el-dropdown-item command="stop" class="danger-item" divided>
+                        关闭实例
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+              <template v-else>
+                <el-button type="primary" size="small" @click.stop="onLaunchClick(scope.row)">
+                  启动
+                </el-button>
+                <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
+                <el-dropdown trigger="click" @command="(cmd) => onMoreCommand(cmd, scope.row)">
+                  <el-button size="small" :icon="MoreFilled" @click.stop></el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="delete" class="danger-item">
+                        删除配置
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -378,7 +426,14 @@ import {
   toRef,
   watch
 } from 'vue'
-import { Location, ArrowDown, CircleClose, Upload, Download } from '@element-plus/icons-vue'
+import {
+  Location,
+  ArrowDown,
+  CircleClose,
+  Upload,
+  Download,
+  MoreFilled
+} from '@element-plus/icons-vue'
 import { viewMapLocation, openMapPicker } from '@/utils/mapPicker'
 
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -396,7 +451,7 @@ import {
   importCookies,
   getAgentConfig
 } from '@/api'
-import { validateForm } from '@/utils/common'
+import { validateForm, cssPx } from '@/utils/common'
 import { languages, timezones, screens, BASE_URL } from '@/utils/constants'
 import ProxyManagement from './ProxyManagement.vue'
 
@@ -505,8 +560,12 @@ watch(activeGroupId, (newVal) => {
   resize()
 })
 
+// 可视区能放几行：减去表头，再按行高（含 1px 行分隔线）向下取整。
+// 尺寸从 CSS 变量读取，改样式时无需同步改这里的魔法数。
 const getPageSize = () => {
-  return Math.floor((listRef.value.offsetHeight - 40) / 41.38)
+  const rowH = cssPx('row-h', 44) + 1
+  const avail = listRef.value.offsetHeight - cssPx('thead-h', 44)
+  return Math.max(1, Math.floor(avail / rowH))
 }
 
 const proxyMap = computed(() => new Map(proxies.value.map((p) => [p._id, p])))
@@ -744,6 +803,8 @@ const onCopyCDP = (row) => {
 
 const onMoreCommand = (cmd, row) => {
   if (cmd === 'delete') onDeleteClick(row)
+  else if (cmd === 'stop') onStopClick(row)
+  else if (cmd === 'cdp') onCopyCDP(row)
 }
 
 const onCookieImport = (row) => {
@@ -822,50 +883,130 @@ defineExpose({
 
   .cookie-icon {
     cursor: pointer;
-    font-size: 16px;
-    color: #409eff;
-    margin: 0 4px;
+    font-size: 15px;
+    color: $accent;
+    margin: 0 5px;
+    transition:
+      opacity $ease,
+      color $ease;
+
+    &:hover {
+      opacity: 0.7;
+    }
+
     &.disabled {
-      opacity: 0.3;
+      opacity: 0.25;
       cursor: not-allowed;
+      color: $text-3;
     }
   }
 
   .left .cell {
-    padding-left: 24px;
+    padding-left: 16px;
+  }
+
+  // 操作列纵向居中，且不参与 cell 的 ellipsis 截断
+  td.ops .cell {
+    overflow: visible;
+  }
+
+  .name-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+  }
+
+  .name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: $text;
+    font-weight: 500;
+  }
+
+  // 状态点：运行中实心主色 + 呼吸光圈，停止为中性描边圆
+  .status-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    border: 1px solid $border-strong-color;
+    background-color: transparent;
+
+    &.running {
+      border-color: transparent;
+      background-color: $success;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--cm-success) 22%, transparent);
+    }
+  }
+
+  .tag {
+    display: inline-block;
+    max-width: 100%;
+    padding: 1px 8px;
+    border-radius: 4px;
+    color: $text-2;
+    background-color: $surface-3;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+  }
+
+  .muted {
+    color: $text-3;
+  }
+
+  .ops-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 }
 
-.delete-item {
-  color: #f56c6c !important;
+.danger-item {
+  color: $danger !important;
+
+  &:hover,
+  &:focus {
+    background-color: color-mix(in srgb, var(--cm-danger) 12%, transparent) !important;
+  }
 }
 </style>
 
 <style lang="scss" scoped>
 .content {
-  width: 100%;
-  height: calc(100% - 60px);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 
   .list {
-    width: 100%;
-    height: calc(100% - 52px);
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
 
     .table {
       height: 100%;
-
-      .delete {
-        color: $red-color;
-      }
     }
   }
 
   .pagination {
-    padding: 10px;
-
-    .el-pagination {
-      justify-content: center;
-    }
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    height: $pager-h;
+    border-top: $border;
+    background-color: $surface-2;
   }
 }
 
@@ -873,7 +1014,14 @@ defineExpose({
   width: 100%;
 }
 
+// 指纹开关行：等分铺开，与上方两列表单在视觉上分区
 .switches-row {
+  margin-bottom: 4px;
+  padding: 12px 12px 0;
+  border: $border;
+  border-radius: $radius;
+  background-color: $surface-2;
+
   :deep(.el-col) {
     flex: 1;
   }

@@ -1,48 +1,186 @@
-@use './variables' as *;
+// 主题令牌。浅色写在 :root，深色只覆盖同名变量，组件样式一律引用 _variables.scss 里的 SCSS 别名。
+:root {
+  color-scheme: light;
+
+  --cm-bg: #f5f6f8;
+  --cm-surface: #ffffff;
+  --cm-surface-2: #f4f5f7;
+  --cm-surface-3: #eaecf0;
+
+  --cm-text: #1f2328;
+  --cm-text-2: #596170;
+  --cm-text-3: #8b929e;
+
+  --cm-accent: #2f6feb;
+  --cm-accent-soft: rgb(47 111 235 / 9%);
+  --cm-success: #16a34a;
+  --cm-warning: #d97706;
+  --cm-danger: #dc2626;
+
+  --cm-border: #e4e7eb;
+  --cm-border-strong: #cfd4db;
+
+  --cm-shadow-sm: 0 1px 2px rgb(16 24 40 / 6%);
+  --cm-shadow: 0 12px 32px rgb(16 24 40 / 12%);
+
+  // 布局尺寸：JS 侧计算分页容量时读取同名变量，避免前后端各写一份魔法数
+  --cm-topbar-h: 48px;
+  --cm-toolbar-h: 56px;
+  --cm-row-h: 44px;
+  --cm-thead-h: 44px;
+  --cm-pager-h: 48px;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --cm-bg: #15171c;
+  --cm-surface: #1c1f25;
+  --cm-surface-2: #23272f;
+  --cm-surface-3: #2b3038;
+
+  --cm-text: #e7e9ee;
+  --cm-text-2: #a4acba;
+  --cm-text-3: #79818f;
+
+  --cm-accent: #5b8dff;
+  --cm-accent-soft: rgb(91 141 255 / 16%);
+  --cm-success: #34d399;
+  --cm-warning: #fbbf24;
+  --cm-danger: #f87171;
+
+  --cm-border: #2c313a;
+  --cm-border-strong: #3b414c;
+
+  --cm-shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --cm-shadow: 0 12px 32px rgb(0 0 0 / 50%);
+}
+
+// 把 Element Plus 的 CSS 变量接到上面的令牌上，这样组件不必逐个覆盖样式。
+:root,
+html.dark {
+  --el-color-primary: var(--cm-accent);
+  --el-color-success: var(--cm-success);
+  --el-color-warning: var(--cm-warning);
+  --el-color-danger: var(--cm-danger);
+  --el-color-error: var(--cm-danger);
+
+  --el-text-color-primary: var(--cm-text);
+  --el-text-color-regular: var(--cm-text-2);
+  --el-text-color-secondary: var(--cm-text-3);
+  --el-text-color-placeholder: var(--cm-text-3);
+
+  --el-bg-color: var(--cm-surface);
+  --el-bg-color-page: var(--cm-bg);
+  --el-bg-color-overlay: var(--cm-surface);
+  --el-fill-color-blank: var(--cm-surface);
+  --el-fill-color-light: var(--cm-surface-2);
+  --el-fill-color-lighter: var(--cm-surface-2);
+  --el-fill-color: var(--cm-surface-3);
+
+  --el-border-color: var(--cm-border-strong);
+  --el-border-color-light: var(--cm-border);
+  --el-border-color-lighter: var(--cm-border);
+  --el-border-color-extra-light: var(--cm-border);
+
+  --el-border-radius-base: #{$radius-sm};
+  --el-border-radius-small: #{$radius-sm};
+
+  --el-table-border-color: var(--cm-border);
+  --el-table-header-bg-color: var(--cm-surface-2);
+  --el-table-row-hover-bg-color: var(--cm-accent-soft);
+  --el-table-current-row-bg-color: var(--cm-accent-soft);
+}
 
 html,
 body {
-  background-color: $white-color;
+  color: $text;
+  background-color: $bg;
   font-family:
-    Helvetica Neue,
-    Helvetica,
-    PingFang SC,
-    Hiragino Sans GB,
-    Microsoft YaHei,
-    SimSun,
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
+// 滚动条：细窄样式，跟随主题
+* {
+  scrollbar-width: thin;
+  scrollbar-color: $border-strong-color transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+  background-color: $border-strong-color;
+
+  &:hover {
+    background-color: $text-3;
+  }
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+// 弹窗：统一分区留白与分隔线，替代 Element 默认的紧凑内边距
 .el-overlay {
   .el-dialog,
   .el-message-box {
     padding: 0 !important;
+    border-radius: $radius-lg;
+    box-shadow: $shadow;
+    overflow: hidden;
   }
 
   .el-dialog__header,
   .el-message-box__header {
-    padding: 20px 20px 10px;
-    border-bottom: $border1;
+    padding: 18px 22px;
+    border-bottom: $border;
+    background-color: $surface-2;
+    margin-right: 0;
+  }
+
+  .el-dialog__title,
+  .el-message-box__title {
+    color: $text;
+    font-size: 15px;
+    font-weight: 600;
   }
 
   .el-dialog__headerbtn,
   .el-message-box__headerbtn {
-    width: auto;
-    height: auto;
-    top: 20px;
-    right: 20px;
+    width: 28px;
+    height: 28px;
+    top: 14px;
+    right: 14px;
+    border-radius: $radius-sm;
+    transition: background-color $ease;
+
+    &:hover {
+      background-color: $surface-3;
+    }
   }
 
   .el-dialog__body,
   .el-message-box__content {
-    padding: 30px 20px 0;
+    padding: 22px;
   }
 
   .el-dialog__footer,
   .el-message-box__btns {
-    padding: 10px 20px 20px;
+    padding: 14px 22px 18px;
+    border-top: $border;
+    background-color: $surface-2;
   }
 
+  // 垂直居中：用行内块 + 基线撑高，避免 flex 让长表单溢出视口
   .el-overlay-dialog {
     text-align: center;
 
@@ -63,6 +201,8 @@ body {
       .el-form {
         .el-form-item__label {
           cursor: pointer;
+          color: $text-2;
+          font-weight: 500;
         }
 
         .el-select {
@@ -81,17 +221,70 @@ body {
   }
 }
 
-.el-table__inner-wrapper::before {
-  display: none;
+// 表格：去掉 Element 默认的外层横线，行高与表头交给令牌控制
+.el-table {
+  --el-table-border-color: var(--cm-border);
+
+  background-color: transparent;
+
+  .el-table__inner-wrapper::before {
+    display: none;
+  }
+
+  th.el-table__cell {
+    height: $thead-h;
+    color: $text-2;
+    font-weight: 600;
+    background-color: $surface-2;
+  }
+
+  td.el-table__cell {
+    height: $row-h;
+    padding: 0;
+  }
+
+  .el-table__row {
+    transition: background-color $ease;
+  }
+}
+
+// 按钮：中性描边按钮 hover 时用主色提示，避免默认灰蓝观感
+.el-button {
+  font-weight: 500;
+  transition:
+    background-color $ease,
+    border-color $ease,
+    color $ease;
+}
+
+.el-button.is-text,
+.el-button--default:not(.is-plain) {
+  &:hover,
+  &:focus-visible {
+    color: $accent;
+    border-color: $accent;
+    background-color: $accent-soft;
+  }
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  transition: box-shadow $ease;
 }
 
 .location-icon {
   cursor: pointer;
-  font-size: 16px;
-  color: #409eff;
+  font-size: 15px;
+  color: $accent;
   vertical-align: middle;
+  transition: opacity $ease;
+
+  &:hover {
+    opacity: 0.7;
+  }
 }
 
+// 只读选择器：外观像输入框，但抑制光标与文本选中
 .input-picker {
   cursor: pointer;
 
@@ -115,4 +308,35 @@ body {
   height: 100%;
   padding-left: 8px;
   cursor: pointer;
+}
+
+// 图标按钮：顶栏与分组栏共用的无边框方形按钮
+.cm-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: $radius-sm;
+  color: $text-2;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color $ease,
+    background-color $ease;
+
+  .el-icon {
+    font-size: 16px;
+  }
+
+  &:hover {
+    color: $accent;
+    background-color: $accent-soft;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $accent;
+    outline-offset: 1px;
+  }
 }

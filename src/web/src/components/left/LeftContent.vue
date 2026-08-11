@@ -8,11 +8,15 @@
             :class="{ active: item._id === activeGroupId }"
             @click="onItemClick(item)"
           >
-            <div class="name">{{ item.name }}</div>
-            <div v-if="item._id !== 'all'" class="action">
-              <el-icon @click.stop="onEditClick(item)"><EditPen /></el-icon>
-              <el-icon @click.stop="onDeleteClick(item)"><Delete /></el-icon>
-            </div>
+            <el-icon class="icon">
+              <FolderOpened v-if="item._id === 'all'" />
+              <Folder v-else />
+            </el-icon>
+            <span class="name">{{ item.name }}</span>
+            <span v-if="item._id !== 'all'" class="action">
+              <el-icon title="编辑分组" @click.stop="onEditClick(item)"><EditPen /></el-icon>
+              <el-icon title="删除分组" @click.stop="onDeleteClick(item)"><Delete /></el-icon>
+            </span>
           </li>
         </template>
       </ul>
@@ -59,7 +63,7 @@
 
 <script setup>
 import { defineExpose, inject, nextTick, onMounted, reactive, ref } from 'vue'
-import { EditPen, Delete } from '@element-plus/icons-vue'
+import { EditPen, Delete, Folder, FolderOpened } from '@element-plus/icons-vue'
 
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -184,58 +188,93 @@ defineExpose({
 
 <style lang="scss" scoped>
 .content {
-  height: calc(100% - 60px);
+  flex: 1 1 auto;
+  min-height: 0;
 
   .list {
-    width: 100%;
-    height: 100%;
-    overflow-y: auto;
+    padding: 6px;
+  }
 
-    .item {
-      position: relative;
-      padding: 0 24px 0 18px;
-      height: 56px;
-      line-height: 56px;
-      border-left: 5px solid transparent;
-      border-bottom: 1px solid #ebeef5;
-      font-size: 18px;
-      color: $text-color2;
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 6px 0 8px;
+    border-radius: $radius-sm;
+    color: $text-2;
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+      color $ease,
+      background-color $ease;
 
-      &:hover {
-        background-color: $background-color1;
+    & + .item {
+      margin-top: 2px;
+    }
 
-        .action {
-          visibility: visible;
-        }
-      }
-
-      .name {
-        width: 232px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
+    &:hover {
+      color: $text;
+      background-color: $surface-2;
 
       .action {
-        position: absolute;
-        top: 0;
-        right: 24px;
-        background-color: $background-color1;
-        visibility: hidden;
-
-        .el-icon {
-          width: 28px;
-          height: 28px;
-          text-align: center;
-          font-size: 20px;
-          color: $blue-color;
-          cursor: pointer;
-        }
+        opacity: 1;
       }
     }
 
-    .item.active {
-      border-left: 5px solid $blue-color;
+    .icon {
+      flex: 0 0 auto;
+      font-size: 15px;
+      color: $text-3;
+    }
+
+    .name {
+      flex: 1 1 auto;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    // 默认淡出而非隐藏，避免 hover 时按钮硬切造成的跳动
+    .action {
+      display: flex;
+      flex: 0 0 auto;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity $ease;
+
+      .el-icon {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        font-size: 14px;
+        color: $text-3;
+        transition:
+          color $ease,
+          background-color $ease;
+
+        &:hover {
+          color: $accent;
+          background-color: $accent-soft;
+        }
+
+        &:last-child:hover {
+          color: $danger;
+          background-color: transparent;
+        }
+      }
+    }
+  }
+
+  .item.active {
+    color: $accent;
+    background-color: $accent-soft;
+    font-weight: 500;
+
+    .icon {
+      color: $accent;
     }
   }
 }

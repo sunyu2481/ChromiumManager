@@ -3,17 +3,17 @@
     <div class="proxy-header">
       <el-input
         v-model="keyword"
-        placeholder="名称 / IP / 语言 / 时区"
+        placeholder="搜索名称 / IP / 语言 / 时区"
         clearable
         class="proxy-search"
+        :prefix-icon="Search"
         @keydown.enter="onSearchClick"
         @clear="onSearchClick"
-      >
-        <template #append>
-          <el-button :icon="Search" @click="onSearchClick"></el-button>
-        </template>
-      </el-input>
-      <el-button type="primary" :icon="Plus" @click="onAddClick">添加代理</el-button>
+      ></el-input>
+      <div class="proxy-header-right">
+        <span class="hint">点击行即选用该代理</span>
+        <el-button type="primary" :icon="Plus" @click="onAddClick">添加代理</el-button>
+      </div>
     </div>
 
     <div class="proxy-table-wrap">
@@ -55,12 +55,14 @@
             </el-icon>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="150">
+        <el-table-column fixed="right" label="操作" width="140" class-name="ops">
           <template #default="scope">
-            <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
-            <el-button size="small" class="delete" @click.stop="onDeleteClick(scope.row)">
-              删除
-            </el-button>
+            <div class="ops-cell">
+              <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
+              <el-button size="small" class="delete" @click.stop="onDeleteClick(scope.row)">
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
         <template #empty>
@@ -333,6 +335,16 @@ const onDeleteClick = (row) => {
   .el-table__body-wrapper .el-scrollbar__view {
     height: 100%;
   }
+
+  .ops-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  td.ops .cell {
+    overflow: visible;
+  }
 }
 </style>
 
@@ -341,23 +353,40 @@ const onDeleteClick = (row) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+.proxy-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hint {
+  color: $text-3;
+  font-size: 12px;
 }
 .proxy-search {
   width: 260px;
 }
 .proxy-table-wrap {
   height: 386px;
+  margin-top: 14px;
+  border: $border;
+  border-radius: $radius;
+  overflow: hidden;
 }
 .proxy-table {
   width: 100%;
   height: 100%;
-  padding-top: 15px;
 }
 .proxy-pagination {
-  padding: 15px 0 20px;
+  padding-top: 14px;
   justify-content: center;
 }
 .delete {
-  color: $red-color;
+  color: $danger;
+}
+// 行可点选，给出与"可点击"一致的指针反馈
+.proxy-table :deep(.el-table__row) {
+  cursor: pointer;
 }
 </style>

@@ -42,6 +42,8 @@ export default defineConfig({
       '/show_': 'http://127.0.0.1:10101',
       '/export_': 'http://127.0.0.1:10101',
       '/import_': 'http://127.0.0.1:10101',
+      '/auth/': 'http://127.0.0.1:10101',
+      '/login': 'http://127.0.0.1:10101',
       '/events': { target: 'http://127.0.0.1:10101', ws: true }
     }
   },

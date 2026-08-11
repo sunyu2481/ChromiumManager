@@ -1,17 +1,15 @@
 <template>
-  <div class="left">
+  <aside class="left">
     <div class="header">
-      <div class="title"><span>分组列表</span></div>
-      <div class="button">
-        <el-tooltip content="添加分组" placement="bottom">
-          <button type="button" class="icon-button" aria-label="添加分组" @click="onAddClick">
-            <el-icon><Plus /></el-icon>
-          </button>
-        </el-tooltip>
-      </div>
+      <span class="title">分组</span>
+      <el-tooltip content="添加分组" placement="bottom">
+        <button type="button" class="cm-icon-btn" aria-label="添加分组" @click="onAddClick">
+          <el-icon><Plus /></el-icon>
+        </button>
+      </el-tooltip>
     </div>
     <Content ref="contentRef" />
-  </div>
+  </aside>
 </template>
 
 <script setup>
@@ -23,56 +21,32 @@ let contentRef = ref(null)
 const onAddClick = () => {
   contentRef.value.onAddClick()
 }
-
 </script>
 
 <style lang="scss" scoped>
 .left {
-  float: left;
-  width: 280px;
-  height: 100%;
-  border-right: $border1;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 232px;
+  min-height: 0;
+  border-right: $border;
+  background-color: $surface;
 
   .header {
-    height: 60px;
-    line-height: 60px;
-    padding: 0 20px;
-    background-color: $background-color2;
-    color: $white-color;
-    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    height: $toolbar-h;
+    padding: 0 10px 0 16px;
+    border-bottom: $border;
 
     .title {
-      float: left;
-    }
-
-    .button {
-      float: right;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      height: 60px;
-
-      .icon-button {
-        display: grid;
-        place-items: center;
-        width: 28px;
-        height: 36px;
-        padding: 0;
-        border: 0;
-        color: inherit;
-        background: transparent;
-        cursor: pointer;
-
-        &:focus-visible {
-          outline: 2px solid $white-color;
-          outline-offset: 1px;
-        }
-      }
-
-      .el-icon {
-        cursor: pointer;
-        font-size: 24px;
-      }
+      color: $text-3;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
     }
   }
 }

@@ -1,28 +1,45 @@
-$white-color: #ffffff;
-$black-color: #000000;
-$blue-color: #409eff;
-$green-color: #67c23a;
-$red-color: #f56c6c;
-$orange-color: #e6a23c;
+// 设计令牌：SCSS 变量统一指向 CSS 自定义属性。
+// 深色模式只需在 html.dark 上换一套变量值（见 style.scss），组件样式无需重复书写。
 
-$text-color1: #1f2d3d;
-$text-color2: #606266;
-$text-color3: #909399;
-$text-color4: #3a8ee6;
-$text-color5: #f8f8f8;
+// 表面与背景
+$bg: var(--cm-bg);
+$surface: var(--cm-surface);
+$surface-2: var(--cm-surface-2);
+$surface-3: var(--cm-surface-3);
 
-$background-color1: #f8f8f8;
-$background-color2: #545c64;
-$background-color3: #ecf5ff;
-$background-color4: #2d2e2c;
+// 文本
+$text: var(--cm-text);
+$text-2: var(--cm-text-2);
+$text-3: var(--cm-text-3);
 
-$border-color1: #dcdfe6;
-$border-color2: #c6e2ff;
-$border-color3: #3a8ee6;
+// 主色与语义色
+$accent: var(--cm-accent);
+$accent-soft: var(--cm-accent-soft);
+$success: var(--cm-success);
+$warning: var(--cm-warning);
+$danger: var(--cm-danger);
 
-$scrollbar-color2: #6c6d6c;
+// 边框
+$border-color: var(--cm-border);
+$border-strong-color: var(--cm-border-strong);
+$border: 1px solid var(--cm-border);
+$border-strong: 1px solid var(--cm-border-strong);
 
-$scrollbar-hover-color2: #969796;
+// 圆角
+$radius-sm: 6px;
+$radius: 8px;
+$radius-lg: 12px;
 
-$border1: 1px solid #dcdfe6;
-$border2: 1px solid #ebeef5;
+// 阴影
+$shadow-sm: var(--cm-shadow-sm);
+$shadow: var(--cm-shadow);
+
+// 动效：交互反馈统一时长，避免各组件各写一套
+$ease: 0.18s ease;
+
+// 布局尺寸（JS 侧通过 cssPx() 读取同名 CSS 变量，不再各写一份）
+$topbar-h: var(--cm-topbar-h);
+$toolbar-h: var(--cm-toolbar-h);
+$row-h: var(--cm-row-h);
+$thead-h: var(--cm-thead-h);
+$pager-h: var(--cm-pager-h);

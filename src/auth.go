@@ -260,6 +260,41 @@ var loginPageTemplate = template.Must(template.New("login").Parse(`<!doctype htm
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>登录 - Chromium Manager</title>
   <style>
+    /* 设计令牌与管理面（src/web/src/assets/css/style.scss）保持同一套值 */
+    :root {
+      color-scheme: light;
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --surface-2: #f4f5f7;
+      --text: #1f2328;
+      --text-2: #596170;
+      --text-3: #8b929e;
+      --accent: #2f6feb;
+      --accent-soft: rgb(47 111 235 / 9%);
+      --danger: #dc2626;
+      --danger-soft: #fef2f2;
+      --border: #e4e7eb;
+      --border-strong: #cfd4db;
+      --shadow: 0 12px 32px rgb(16 24 40 / 12%);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #15171c;
+        --surface: #1c1f25;
+        --surface-2: #23272f;
+        --text: #e7e9ee;
+        --text-2: #a4acba;
+        --text-3: #79818f;
+        --accent: #5b8dff;
+        --accent-soft: rgb(91 141 255 / 16%);
+        --danger: #f87171;
+        --danger-soft: rgb(248 113 113 / 12%);
+        --border: #2c313a;
+        --border-strong: #3b414c;
+        --shadow: 0 12px 32px rgb(0 0 0 / 50%);
+      }
+    }
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body {
@@ -268,34 +303,45 @@ var loginPageTemplate = template.Must(template.New("login").Parse(`<!doctype htm
       display: grid;
       place-items: center;
       padding: 24px;
-      color: #1f2937;
-      background: #f3f4f6;
-      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    main { width: min(100%, 380px); }
-    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    main { width: min(100%, 372px); }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
     .brand-mark {
-      width: 42px; height: 42px; display: grid; place-items: center;
-      border-radius: 8px; color: #fff; background: #16a34a;
-      font-size: 20px; font-weight: 700;
+      width: 32px; height: 32px; display: grid; place-items: center;
+      border-radius: 8px; color: #fff; background: var(--accent);
+      font-size: 13px; font-weight: 700; letter-spacing: .3px;
     }
-    h1 { margin: 0; color: #111827; font-size: 24px; font-weight: 650; letter-spacing: 0; }
-    .subtitle { margin: 2px 0 0; color: #6b7280; }
-    form { padding: 28px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(17, 24, 39, .08); }
-    label { display: block; margin-bottom: 16px; color: #374151; font-weight: 600; }
+    h1 { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; }
+    .subtitle { margin: 1px 0 0; color: var(--text-3); font-size: 12.5px; }
+    form {
+      padding: 26px; border: 1px solid var(--border); border-radius: 12px;
+      background: var(--surface); box-shadow: var(--shadow);
+    }
+    label { display: block; margin-bottom: 16px; color: var(--text-2); font-weight: 500; font-size: 13px; }
     input {
-      width: 100%; height: 42px; margin-top: 7px; padding: 0 12px;
-      border: 1px solid #cbd5e1; border-radius: 6px; outline: 0;
-      color: #111827; background: #fff; font: inherit;
+      width: 100%; height: 38px; margin-top: 7px; padding: 0 11px;
+      border: 1px solid var(--border-strong); border-radius: 6px; outline: 0;
+      color: var(--text); background: var(--surface); font: inherit;
+      transition: border-color .18s ease, box-shadow .18s ease;
     }
-    input:focus { border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, .14); }
-    .error { margin: 0 0 16px; padding: 10px 12px; border-left: 3px solid #dc2626; color: #991b1b; background: #fef2f2; }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .error {
+      margin: 0 0 16px; padding: 9px 12px; border-radius: 6px;
+      border-left: 3px solid var(--danger); color: var(--danger); background: var(--danger-soft);
+      font-size: 13px;
+    }
     button {
-      width: 100%; height: 42px; border: 0; border-radius: 6px;
-      color: #fff; background: #15803d; font: inherit; font-weight: 650; cursor: pointer;
+      width: 100%; height: 38px; margin-top: 4px; border: 0; border-radius: 6px;
+      color: #fff; background: var(--accent); font: inherit; font-weight: 600; cursor: pointer;
+      transition: filter .18s ease;
     }
-    button:hover { background: #166534; }
-    button:focus-visible { outline: 3px solid rgba(22, 163, 74, .25); outline-offset: 2px; }
+    button:hover { filter: brightness(1.08); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   </style>
 </head>
 <body>
