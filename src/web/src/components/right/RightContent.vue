@@ -153,235 +153,258 @@
         label-width="auto"
         size="default"
       >
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="名称" prop="name">
-              <el-input v-model="model.form.name" placeholder="请输入名称"></el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="分组" prop="groupId">
-              <el-select v-model="model.form.groupId" filterable>
-                <template v-for="item in model.group" :key="item._id">
-                  <el-option :label="item.name" :value="item._id"></el-option>
-                </template>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="代理" prop="proxy" class="input-picker">
-              <el-input
-                :model-value="formProxyName"
-                placeholder="请选择代理"
-                @click="onManageProxyClick"
-                @keydown.prevent
-              >
-                <template #suffix>
-                  <span
-                    class="input-picker-suffix"
-                    @click.stop="model.form.proxy ? (model.form.proxy = '') : onManageProxyClick()"
-                  >
-                    <el-icon v-if="model.form.proxy" class="el-input__clear">
-                      <CircleClose />
-                    </el-icon>
-                    <el-icon v-else><ArrowDown /></el-icon>
-                  </span>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="排序" prop="sort">
-              <el-input-number
-                v-model="model.form.sort"
-                :min="0"
-                :max="99"
-                controls-position="right"
-              ></el-input-number>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-section">
+          <div class="form-section-title">归属与标识</div>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="名称" prop="name">
+                <el-input v-model="model.form.name" placeholder="请输入名称"></el-input>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="分组" prop="groupId">
+                <el-select v-model="model.form.groupId" filterable>
+                  <template v-for="item in model.group" :key="item._id">
+                    <el-option :label="item.name" :value="item._id"></el-option>
+                  </template>
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="代理" prop="proxy" class="input-picker">
+                <el-input
+                  :model-value="formProxyName"
+                  placeholder="请选择代理"
+                  @click="onManageProxyClick"
+                  @keydown.prevent
+                >
+                  <template #suffix>
+                    <span
+                      class="input-picker-suffix"
+                      @click.stop="
+                        model.form.proxy ? (model.form.proxy = '') : onManageProxyClick()
+                      "
+                    >
+                      <el-icon v-if="model.form.proxy" class="el-input__clear">
+                        <CircleClose />
+                      </el-icon>
+                      <el-icon v-else><ArrowDown /></el-icon>
+                    </span>
+                  </template>
+                </el-input>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="排序" prop="sort">
+                <el-input-number
+                  v-model="model.form.sort"
+                  :min="0"
+                  :max="99"
+                  controls-position="right"
+                ></el-input-number>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
 
-        <el-row class="switches-row">
-          <el-col>
-            <el-form-item label="随机指纹">
-              <el-switch v-model="model.form.fp.randomFingerprint" />
-            </el-form-item>
-          </el-col>
-          <el-col>
-            <el-form-item label="代理语言">
-              <el-switch v-model="model.form.fp.proxyLang" />
-            </el-form-item>
-          </el-col>
-          <el-col>
-            <el-form-item label="代理时区">
-              <el-switch v-model="model.form.fp.proxyTimezone" />
-            </el-form-item>
-          </el-col>
-          <el-col>
-            <el-form-item label="代理位置">
-              <el-switch v-model="model.form.fp.proxyLocation" />
-            </el-form-item>
-          </el-col>
-          <el-col>
-            <el-form-item label="WebRTC">
-              <el-switch
-                :model-value="!model.form.fp.disableFeatures.includes('webrtc')"
-                @update:model-value="(v) => toggleFeature('webrtc', !v)"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-section">
+          <div class="form-section-title">
+            指纹策略
+            <span class="form-section-hint">开启「代理…」开关后，对应字段的值取自所选代理</span>
+          </div>
+          <el-row class="switches-row">
+            <el-col>
+              <el-form-item label="随机指纹">
+                <el-switch v-model="model.form.fp.randomFingerprint" />
+              </el-form-item>
+            </el-col>
+            <el-col>
+              <el-form-item label="代理语言">
+                <el-switch v-model="model.form.fp.proxyLang" />
+              </el-form-item>
+            </el-col>
+            <el-col>
+              <el-form-item label="代理时区">
+                <el-switch v-model="model.form.fp.proxyTimezone" />
+              </el-form-item>
+            </el-col>
+            <el-col>
+              <el-form-item label="代理位置">
+                <el-switch v-model="model.form.fp.proxyLocation" />
+              </el-form-item>
+            </el-col>
+            <el-col>
+              <el-form-item label="WebRTC">
+                <el-switch
+                  :model-value="!model.form.fp.disableFeatures.includes('webrtc')"
+                  @update:model-value="(v) => toggleFeature('webrtc', !v)"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="操作系统">
-              <el-select v-model="model.form.fp.platform" clearable placeholder="请选择操作系统">
-                <el-option label="Windows" value="windows"></el-option>
-                <el-option label="Linux" value="linux"></el-option>
-                <el-option label="macOS" value="macos"></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="浏览器品牌">
-              <el-select v-model="model.form.fp.brand" clearable placeholder="请选择浏览器品牌">
-                <el-option label="Chrome" value="Chrome"></el-option>
-                <el-option label="Edge" value="Edge"></el-option>
-                <el-option label="Opera" value="Opera"></el-option>
-                <el-option label="Vivaldi" value="Vivaldi"></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-section">
+          <div class="form-section-title">设备环境</div>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="操作系统">
+                <el-select v-model="model.form.fp.platform" clearable placeholder="请选择操作系统">
+                  <el-option label="Windows" value="windows"></el-option>
+                  <el-option label="Linux" value="linux"></el-option>
+                  <el-option label="macOS" value="macos"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="浏览器品牌">
+                <el-select v-model="model.form.fp.brand" clearable placeholder="请选择浏览器品牌">
+                  <el-option label="Chrome" value="Chrome"></el-option>
+                  <el-option label="Edge" value="Edge"></el-option>
+                  <el-option label="Opera" value="Opera"></el-option>
+                  <el-option label="Vivaldi" value="Vivaldi"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="设备核心">
+                <el-select
+                  v-model="model.form.fp.hardwareConcurrency"
+                  placeholder="请选择设备核心"
+                  clearable
+                >
+                  <el-option label="2" value="2"></el-option>
+                  <el-option label="4" value="4"></el-option>
+                  <el-option label="6" value="6"></el-option>
+                  <el-option label="8" value="8"></el-option>
+                  <el-option label="10" value="10"></el-option>
+                  <el-option label="12" value="12"></el-option>
+                  <el-option label="16" value="16"></el-option>
+                  <el-option label="20" value="20"></el-option>
+                  <el-option label="24" value="24"></el-option>
+                  <el-option label="32" value="32"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="设备内存">
+                <el-select
+                  v-model="model.form.fp.deviceMemory"
+                  placeholder="请选择设备内存"
+                  clearable
+                >
+                  <el-option label="2" value="2"></el-option>
+                  <el-option label="4" value="4"></el-option>
+                  <el-option label="8" value="8"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="屏幕尺寸">
+                <el-select v-model="model.form.fp.screen" clearable placeholder="请选择屏幕尺寸">
+                  <el-option v-for="s in screens" :key="s" :label="s" :value="s"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="设备核心">
-              <el-select
-                v-model="model.form.fp.hardwareConcurrency"
-                placeholder="请选择设备核心"
-                clearable
-              >
-                <el-option label="2" value="2"></el-option>
-                <el-option label="4" value="4"></el-option>
-                <el-option label="6" value="6"></el-option>
-                <el-option label="8" value="8"></el-option>
-                <el-option label="10" value="10"></el-option>
-                <el-option label="12" value="12"></el-option>
-                <el-option label="16" value="16"></el-option>
-                <el-option label="20" value="20"></el-option>
-                <el-option label="24" value="24"></el-option>
-                <el-option label="32" value="32"></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="设备内存">
-              <el-select
-                v-model="model.form.fp.deviceMemory"
-                placeholder="请选择设备内存"
-                clearable
-              >
-                <el-option label="2" value="2"></el-option>
-                <el-option label="4" value="4"></el-option>
-                <el-option label="8" value="8"></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-section">
+          <div class="form-section-title">地区归属</div>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="语言">
+                <el-select
+                  v-model="model.form.fp.lang"
+                  filterable
+                  clearable
+                  :disabled="model.form.fp.proxyLang"
+                  :placeholder="model.form.fp.proxyLang ? '跟随所选代理' : '请选择语言'"
+                >
+                  <el-option
+                    v-for="lang in languages"
+                    :key="lang"
+                    :label="lang"
+                    :value="lang"
+                  ></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="时区">
+                <el-select
+                  v-model="model.form.fp.timezone"
+                  filterable
+                  clearable
+                  :disabled="model.form.fp.proxyTimezone"
+                  :fit-input-width="true"
+                  :placeholder="model.form.fp.proxyTimezone ? '跟随所选代理' : '请选择时区'"
+                >
+                  <el-option v-for="tz in timezones" :key="tz" :label="tz" :value="tz"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="24">
+              <el-form-item label="位置" class="input-picker">
+                <el-input
+                  v-model="model.form.fp.location"
+                  :disabled="model.form.fp.proxyLocation"
+                  :placeholder="model.form.fp.proxyLocation ? '跟随所选代理' : '请选择位置'"
+                  clearable
+                  class="input-picker"
+                  @click="onPickFpLocation"
+                  @keydown.prevent
+                ></el-input>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <p v-if="proxyDerivedHint" class="form-section-note">{{ proxyDerivedHint }}</p>
+        </div>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="屏幕尺寸">
-              <el-select v-model="model.form.fp.screen" clearable placeholder="请选择屏幕尺寸">
-                <el-option v-for="s in screens" :key="s" :label="s" :value="s"></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="位置" class="input-picker">
-              <el-input
-                v-model="model.form.fp.location"
-                :disabled="model.form.fp.proxyLocation"
-                placeholder="请选择位置"
-                clearable
-                class="input-picker"
-                @click="onPickFpLocation"
-                @keydown.prevent
-              ></el-input>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="语言">
-              <el-select
-                v-model="model.form.fp.lang"
-                filterable
-                clearable
-                :disabled="model.form.fp.proxyLang"
-                placeholder="请选择语言"
-              >
-                <el-option
-                  v-for="lang in languages"
-                  :key="lang"
-                  :label="lang"
-                  :value="lang"
-                ></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="时区">
-              <el-select
-                v-model="model.form.fp.timezone"
-                filterable
-                clearable
-                :disabled="model.form.fp.proxyTimezone"
-                :fit-input-width="true"
-                placeholder="请选择时区"
-              >
-                <el-option v-for="tz in timezones" :key="tz" :label="tz" :value="tz"></el-option>
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="禁用伪装">
-              <el-checkbox-group
-                v-model="model.form.fp.disableFingerprint"
-                :disabled="!model.form.fp.randomFingerprint"
-              >
-                <el-checkbox value="font">字体</el-checkbox>
-                <el-checkbox value="audio">音频</el-checkbox>
-                <el-checkbox value="canvas">Canvas</el-checkbox>
-                <el-checkbox value="clientrects">ClientRects</el-checkbox>
-                <el-checkbox value="webgl">WebGL</el-checkbox>
-                <el-checkbox value="gpu">GPU</el-checkbox>
-              </el-checkbox-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="额外参数" prop="args">
-              <el-input
-                v-model="model.form.args"
-                placeholder="请输入额外参数，多个以空格分隔"
-                type="textarea"
-                :rows="3"
-                resize="none"
-              ></el-input>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="form-section">
+          <div class="form-section-title">高级</div>
+          <el-row :gutter="20">
+            <el-col :span="24">
+              <el-form-item label="禁用伪装">
+                <el-checkbox-group
+                  v-model="model.form.fp.disableFingerprint"
+                  :disabled="!model.form.fp.randomFingerprint"
+                >
+                  <el-checkbox value="font">字体</el-checkbox>
+                  <el-checkbox value="audio">音频</el-checkbox>
+                  <el-checkbox value="canvas">Canvas</el-checkbox>
+                  <el-checkbox value="clientrects">ClientRects</el-checkbox>
+                  <el-checkbox value="webgl">WebGL</el-checkbox>
+                  <el-checkbox value="gpu">GPU</el-checkbox>
+                </el-checkbox-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <p v-if="!model.form.fp.randomFingerprint" class="form-section-note">
+            需先开启「随机指纹」才能选择要禁用的伪装项。
+          </p>
+          <el-row :gutter="20">
+            <el-col :span="24">
+              <el-form-item label="额外参数" prop="args">
+                <el-input
+                  v-model="model.form.args"
+                  placeholder="请输入额外参数，多个以空格分隔"
+                  type="textarea"
+                  :rows="3"
+                  resize="none"
+                ></el-input>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
       </el-form>
 
       <template #footer>
@@ -572,6 +595,21 @@ const proxyMap = computed(() => new Map(proxies.value.map((p) => [p._id, p])))
 const formProxyName = computed(() => {
   const p = proxyMap.value.get(model.form.proxy)
   return p ? p.name : ''
+})
+
+// 地区归属分区的说明：列出当前被代理接管的字段，避免用户对着灰掉的输入框猜原因
+const proxyDerivedHint = computed(() => {
+  const fp = model.form.fp
+  // 枚举顺序与表单里字段的排列保持一致，便于对照
+  const taken = []
+  if (fp.proxyLang) taken.push('语言')
+  if (fp.proxyTimezone) taken.push('时区')
+  if (fp.proxyLocation) taken.push('位置')
+  if (!taken.length) return ''
+  const fields = taken.join('、')
+  return formProxyName.value
+    ? `${fields} 由代理「${formProxyName.value}」提供，如需手填请关闭上方对应开关。`
+    : `${fields} 已交由代理提供，但尚未选择代理，启动时这些值将为空。`
 })
 
 const listView = computed(() => {
@@ -1014,16 +1052,56 @@ defineExpose({
   width: 100%;
 }
 
-// 指纹开关行：等分铺开，与上方两列表单在视觉上分区
+// 指纹开关行：等分铺开。分区容器已提供边框与底色，此处不再重复描边
 .switches-row {
-  margin-bottom: 4px;
-  padding: 12px 12px 0;
+  :deep(.el-col) {
+    flex: 1;
+  }
+
+  :deep(.el-form-item):last-child {
+    margin-bottom: 0;
+  }
+}
+
+// 表单分区：把同语义域的字段收进一个浅底容器，替代此前 19 个字段平铺
+.form-section {
+  padding: 14px 16px 2px;
   border: $border;
   border-radius: $radius;
   background-color: $surface-2;
 
-  :deep(.el-col) {
-    flex: 1;
+  & + .form-section {
+    margin-top: 14px;
   }
+
+  // 分区内最后一行不再留额外底距，避免容器下方出现空白带
+  :deep(.el-row):last-of-type .el-form-item {
+    margin-bottom: 12px;
+  }
+}
+
+.form-section-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: $text;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-section-hint {
+  color: $text-3;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+// 分区脚注：解释被开关接管或置灰的字段，紧贴相关字段下方
+.form-section-note {
+  margin: 0 0 12px;
+  color: $text-3;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>

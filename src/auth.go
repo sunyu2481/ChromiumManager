@@ -309,53 +309,86 @@ var loginPageTemplate = template.Must(template.New("login").Parse(`<!doctype htm
         "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-    main { width: min(100%, 372px); }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+
+    /* 卡片：自带头部，与管理面顶栏同构（surface-2 底 + 下边框） */
+    .card {
+      width: min(100%, 360px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      height: 48px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+
+    /* 品牌标记尺寸与管理面顶栏一致：26px / 11px */
     .brand-mark {
-      width: 32px; height: 32px; display: grid; place-items: center;
-      border-radius: 8px; color: #fff; background: var(--accent);
-      font-size: 13px; font-weight: 700; letter-spacing: .3px;
+      flex: 0 0 auto;
+      width: 26px; height: 26px; display: grid; place-items: center;
+      border-radius: 6px; color: #fff; background: var(--accent);
+      font-size: 11px; font-weight: 700; letter-spacing: .3px;
     }
-    h1 { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; }
-    .subtitle { margin: 1px 0 0; color: var(--text-3); font-size: 12.5px; }
-    form {
-      padding: 26px; border: 1px solid var(--border); border-radius: 12px;
-      background: var(--surface); box-shadow: var(--shadow);
-    }
-    label { display: block; margin-bottom: 16px; color: var(--text-2); font-weight: 500; font-size: 13px; }
+    .brand-name { color: var(--text); font-size: 14px; font-weight: 600; }
+
+    .card-body { padding: 22px 20px 20px; }
+    h1 { margin: 0 0 2px; color: var(--text); font-size: 15px; font-weight: 600; }
+    .subtitle { margin: 0 0 18px; color: var(--text-3); font-size: 12.5px; }
+
+    .field { display: block; margin-bottom: 14px; }
+    .field-label { display: block; margin-bottom: 6px; color: var(--text-2); font-weight: 500; font-size: 13px; }
     input {
-      width: 100%; height: 38px; margin-top: 7px; padding: 0 11px;
+      width: 100%; height: 34px; padding: 0 11px;
       border: 1px solid var(--border-strong); border-radius: 6px; outline: 0;
-      color: var(--text); background: var(--surface); font: inherit;
+      color: var(--text); background: var(--surface); font: inherit; font-size: 13px;
       transition: border-color .18s ease, box-shadow .18s ease;
     }
     input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
     .error {
       margin: 0 0 16px; padding: 9px 12px; border-radius: 6px;
       border-left: 3px solid var(--danger); color: var(--danger); background: var(--danger-soft);
       font-size: 13px;
     }
+
     button {
-      width: 100%; height: 38px; margin-top: 4px; border: 0; border-radius: 6px;
-      color: #fff; background: var(--accent); font: inherit; font-weight: 600; cursor: pointer;
-      transition: filter .18s ease;
+      width: 100%; height: 34px; margin-top: 6px; border: 0; border-radius: 6px;
+      color: #fff; background: var(--accent); font: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: filter .18s ease;
     }
     button:hover { filter: brightness(1.08); }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   </style>
 </head>
 <body>
-  <main>
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">CM</div>
-      <div><h1>Chromium Manager</h1><p class="subtitle">登录管理控制台</p></div>
+  <main class="card">
+    <div class="card-header">
+      <span class="brand-mark" aria-hidden="true">CM</span>
+      <span class="brand-name">Chromium Manager</span>
     </div>
-    <form method="post" action="/auth/login">
-      {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
-      <label>用户名<input name="username" value="{{.Username}}" autocomplete="username" required autofocus></label>
-      <label>密码<input type="password" name="password" autocomplete="current-password" required></label>
-      <button type="submit">登录</button>
-    </form>
+    <div class="card-body">
+      <h1>登录</h1>
+      <p class="subtitle">请输入管理控制台凭据</p>
+      <form method="post" action="/auth/login">
+        {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+        <label class="field">
+          <span class="field-label">用户名</span>
+          <input name="username" value="{{.Username}}" autocomplete="username" required autofocus>
+        </label>
+        <label class="field">
+          <span class="field-label">密码</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit">登录</button>
+      </form>
+    </div>
   </main>
 </body>
 </html>`))

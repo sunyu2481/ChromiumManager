@@ -59,7 +59,7 @@
           <template #default="scope">
             <div class="ops-cell">
               <el-button size="small" @click.stop="onEditClick(scope.row)">编辑</el-button>
-              <el-button size="small" class="delete" @click.stop="onDeleteClick(scope.row)">
+              <el-button size="small" class="cm-danger" @click.stop="onDeleteClick(scope.row)">
                 删除
               </el-button>
             </div>
@@ -382,11 +382,28 @@ const onDeleteClick = (row) => {
   padding-top: 14px;
   justify-content: center;
 }
-.delete {
-  color: $danger;
-}
-// 行可点选，给出与"可点击"一致的指针反馈
+// 行可点选：指针反馈之外再给 hover 高亮与左侧主色条，让"整行可点"不必依赖文字提示
 .proxy-table :deep(.el-table__row) {
   cursor: pointer;
+
+  td.el-table__cell:first-child {
+    position: relative;
+  }
+
+  // 左侧主色条常态透明，hover 时显现，避免静态下与选中态混淆
+  td.el-table__cell:first-child::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background-color: transparent;
+    transition: background-color $ease;
+  }
+
+  &:hover td.el-table__cell:first-child::before {
+    background-color: $accent;
+  }
 }
 </style>

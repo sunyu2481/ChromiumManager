@@ -168,9 +168,12 @@ body {
     }
   }
 
+  // 表单区自行滚动，矮视口下 header 与 footer 不会被挤出视野
   .el-dialog__body,
   .el-message-box__content {
     padding: 22px;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
   }
 
   .el-dialog__footer,
@@ -257,13 +260,26 @@ body {
     color $ease;
 }
 
-.el-button.is-text,
-.el-button--default:not(.is-plain) {
+// 语义色按钮排除在外，否则 hover 会把危险色染成主色，丢掉警示信号
+.el-button.is-text:not(.cm-danger),
+.el-button--default:not(.is-plain):not(.cm-danger) {
   &:hover,
   &:focus-visible {
     color: $accent;
     border-color: $accent;
     background-color: $accent-soft;
+  }
+}
+
+// 危险按钮：hover 维持自身语义，仅加深底色
+.el-button.cm-danger {
+  color: $danger;
+
+  &:hover,
+  &:focus-visible {
+    color: $danger;
+    border-color: $danger;
+    background-color: color-mix(in srgb, var(--cm-danger) 12%, transparent);
   }
 }
 
