@@ -830,10 +830,10 @@ const onStopClick = async (row) => {
 }
 
 // onCopyCDP 将该实例的 CDP 接入地址复制到剪贴板，供 agent 容器使用。
-// 地址格式：http://<当前 hostname>:<agent 端口>/cdp/<profile id>
+// 地址格式：http://<当前 hostname>:<agent 端口>/cdp/<配置名称>，agent 面只认名称
 const onCopyCDP = (row) => {
   const { port } = agentConfig.value
-  const url = `http://${window.location.hostname}:${port}/cdp/${row._id}`
+  const url = `http://${window.location.hostname}:${port}/cdp/${encodeURIComponent(row.name)}`
   navigator.clipboard.writeText(url).then(() => {
     ElMessage.success('CDP 地址已复制')
   })

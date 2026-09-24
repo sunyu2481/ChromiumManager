@@ -18,36 +18,42 @@ import (
 // ---- readDevToolsPort ----
 
 func TestReadDevToolsPort_OK(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, devToolsPortFile)
-	// 模拟 Chromium 写出的格式：首行端口，次行 browser target 路径
-	os.WriteFile(p, []byte("54321\n/devtools/browser/abc\n"), 0644)
-
-	port, err := readDevToolsPort(p)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// Chromium 写入 "端口\nbrowser 路径" 且不带结尾换行；browser target 可被发现时路径不含 guid
+	tests := []struct{ content, browserPath string }{
+		{"54321\n/devtools/browser/abc", "/devtools/browser/abc"},
+		{"54321\n/devtools/browser/abc\n", "/devtools/browser/abc"},
+		{"54321\n/devtools/browser", "/devtools/browser"},
 	}
-	if port != 54321 {
-		t.Fatalf("want 54321, got %d", port)
+	for _, tt := range tests {
+		p := filepath.Join(t.TempDir(), devToolsPortFile)
+		os.WriteFile(p, []byte(tt.content), 0644)
+
+		port, browserPath, err := readDevToolsPort(p)
+		if err != nil {
+			t.Fatalf("readDevToolsPort(%q): unexpected error: %v", tt.content, err)
+		}
+		if port != 54321 || browserPath != tt.browserPath {
+			t.Fatalf("readDevToolsPort(%q) = (%d, %q), want (54321, %q)", tt.content, port, browserPath, tt.browserPath)
+		}
 	}
 }
 
 func TestReadDevToolsPort_Missing(t *testing.T) {
-	_, err := readDevToolsPort(filepath.Join(t.TempDir(), "nonexistent"))
+	_, _, err := readDevToolsPort(filepath.Join(t.TempDir(), "nonexistent"))
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}
 }
 
 func TestReadDevToolsPort_Incomplete(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, devToolsPortFile)
-	// 只有第一行，次行尚未写入 —— 视为文件不完整
-	os.WriteFile(p, []byte("54321"), 0644)
+	// 次行尚未写入、为空或只写了一半 —— 都视为文件不完整
+	for _, content := range []string{"54321", "54321\n", "54321\n/devtools/brow", "54321\n/devtools/browser/"} {
+		p := filepath.Join(t.TempDir(), devToolsPortFile)
+		os.WriteFile(p, []byte(content), 0644)
 
-	_, err := readDevToolsPort(p)
-	if err == nil {
-		t.Fatal("expected error for incomplete file")
+		if _, _, err := readDevToolsPort(p); err == nil {
+			t.Fatalf("readDevToolsPort(%q): expected error for incomplete file", content)
+		}
 	}
 }
 
@@ -56,7 +62,7 @@ func TestReadDevToolsPort_InvalidPort(t *testing.T) {
 	p := filepath.Join(dir, devToolsPortFile)
 	os.WriteFile(p, []byte("notaport\n/devtools/browser/abc\n"), 0644)
 
-	_, err := readDevToolsPort(p)
+	_, _, err := readDevToolsPort(p)
 	if err == nil {
 		t.Fatal("expected error for invalid port")
 	}
@@ -69,7 +75,7 @@ func TestWaitDevToolsPort_AbortOnClose(t *testing.T) {
 	abort := make(chan struct{})
 	close(abort) // 模拟浏览器立即退出
 
-	_, err := waitDevToolsPort(dir, 5*time.Second, abort)
+	_, _, err := waitDevToolsPort(dir, 5*time.Second, abort)
 	if err == nil {
 		t.Fatal("expected error when abort channel closed")
 	}
@@ -86,12 +92,12 @@ func TestWaitDevToolsPort_FileWrittenLater(t *testing.T) {
 		os.WriteFile(portFile, []byte("12345\n/devtools/browser/x\n"), 0644)
 	}()
 
-	port, err := waitDevToolsPort(dir, 2*time.Second, abort)
+	port, browserPath, err := waitDevToolsPort(dir, 2*time.Second, abort)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if port != 12345 {
-		t.Fatalf("want 12345, got %d", port)
+	if port != 12345 || browserPath != "/devtools/browser/x" {
+		t.Fatalf("want (12345, /devtools/browser/x), got (%d, %q)", port, browserPath)
 	}
 }
 
@@ -190,10 +196,12 @@ func TestIsWebSocketUpgradeRequiresHandshakeHeaders(t *testing.T) {
 
 // ---- cdpProxyHandler（整合测试）----
 // 用 httptest 伪造一个 Chrome DevTools HTTP/WebSocket 服务，
-// 注入到 runningProfiles 后通过 cdpProxyHandler 代理访问，
+// 按名称登记到临时库与 runningProfiles 后通过 cdpProxyHandler 代理访问，
 // 断言 /json/version 响应体里的地址被改写，以及 WebSocket 升级能穿透。
 
 func TestCDPProxyHandler_JsonVersionRewrite(t *testing.T) {
+	useTestDB(t)
+
 	// 1. 伪造 Chrome DevTools 后端
 	fakePort := 0
 	fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,30 +220,24 @@ func TestCDPProxyHandler_JsonVersionRewrite(t *testing.T) {
 	parts := strings.Split(fakeSrv.URL, ":")
 	fmt.Sscanf(parts[len(parts)-1], "%d", &fakePort)
 
-	// 2. 注入假 runningProfile
-	profileID := "testXXXX"
+	// 2. 登记运行中的实例；名称含中文与空格，验证路由与改写后的地址都保持转义
 	rp := &runningProfile{
-		cdpReady:     make(chan struct{}),
-		devtoolsPort: fakePort,
+		cdpReady:            make(chan struct{}),
+		devtoolsPort:        fakePort,
+		devtoolsBrowserPath: "/devtools/browser/abc",
 	}
 	close(rp.cdpReady)
-	runningMu.Lock()
-	runningProfiles[profileID] = rp
-	runningMu.Unlock()
-	defer func() {
-		runningMu.Lock()
-		delete(runningProfiles, profileID)
-		runningMu.Unlock()
-	}()
+	putRunning(t, insertTestProfile(t, "香港 01", 0), rp)
 
 	// 3. 通过带 PathValue 的 mux 代理请求 /json/version
-	// 必须经过 ServeMux 注册，r.PathValue("id") 才能正确解析
+	// 必须经过 ServeMux 注册，r.PathValue("name") 才能正确解析
 	mux := http.NewServeMux()
-	mux.HandleFunc("/cdp/{id}/{path...}", cdpProxyHandler)
+	mux.HandleFunc("/cdp/{name}/{path...}", cdpProxyHandler)
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
-	resp, err := http.Get(proxySrv.URL + "/cdp/" + profileID + "/json/version")
+	const escapedName = "%E9%A6%99%E6%B8%AF%2001"
+	resp, err := http.Get(proxySrv.URL + "/cdp/" + escapedName + "/json/version")
 	if err != nil {
 		t.Fatalf("GET failed: %v", err)
 	}
@@ -251,17 +253,46 @@ func TestCDPProxyHandler_JsonVersionRewrite(t *testing.T) {
 	if strings.Contains(result, old) {
 		t.Errorf("response still contains raw address %q:\n%s", old, result)
 	}
-	// 入站 Host 是 proxySrv 的地址，拼上 /cdp/{id}
-	wantSuffix := "/cdp/" + profileID
-	if !strings.Contains(result, wantSuffix) {
-		t.Errorf("response does not contain proxy path %q:\n%s", wantSuffix, result)
+	// 入站 Host 是 proxySrv 的地址，拼上转义后的 /cdp/{name}
+	want := "ws://" + strings.TrimPrefix(proxySrv.URL, "http://") + "/cdp/" + escapedName + "/devtools/browser/abc"
+	if !strings.Contains(result, want) {
+		t.Errorf("response does not contain rewritten url %q:\n%s", want, result)
 	}
 }
 
+// 不认识的名称、未运行的实例都应 404；agent 面也不再接受内部 ID。
+func TestCDPProxyHandler_NotFound(t *testing.T) {
+	useTestDB(t)
+	insertTestProfile(t, "stopped", 0)
+	runningID := insertTestProfile(t, "running", 0)
+	putRunning(t, runningID, &runningProfile{})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cdp/{name}/{path...}", cdpProxyHandler)
+	proxySrv := httptest.NewServer(mux)
+	defer proxySrv.Close()
+
+	for _, key := range []string{"missing", "stopped", runningID} {
+		resp, err := http.Get(proxySrv.URL + "/cdp/" + key + "/json/version")
+		if err != nil {
+			t.Fatalf("GET %s failed: %v", key, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("GET /cdp/%s: want 404, got %d", key, resp.StatusCode)
+		}
+	}
+}
+
+// 请求固定的 /devtools/browser 时，代理应补上本次启动的 guid 再升级为 WebSocket。
 func TestCDPProxyHandler_WebSocketUpgrade(t *testing.T) {
-	// 伪造支持 WebSocket 升级的后端
+	useTestDB(t)
+
+	// 伪造支持 WebSocket 升级的后端，记录实际收到的路径
 	var wsFrameReceived atomic.Bool
+	var upstreamPath atomic.Value
 	fakeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamPath.Store(r.URL.Path)
 		if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 			http.Error(w, "expected websocket upgrade", http.StatusBadRequest)
 			return
@@ -286,30 +317,24 @@ func TestCDPProxyHandler_WebSocketUpgrade(t *testing.T) {
 	parts := strings.Split(fakeSrv.URL, ":")
 	fmt.Sscanf(parts[len(parts)-1], "%d", &fakePort)
 
-	profileID := "testWSXX"
+	// 名称含斜杠，验证转义后仍作为单个路径段路由
 	rp := &runningProfile{
-		cdpReady:     make(chan struct{}),
-		devtoolsPort: fakePort,
+		cdpReady:            make(chan struct{}),
+		devtoolsPort:        fakePort,
+		devtoolsBrowserPath: "/devtools/browser/abc",
 	}
 	close(rp.cdpReady)
-	runningMu.Lock()
-	runningProfiles[profileID] = rp
-	runningMu.Unlock()
-	defer func() {
-		runningMu.Lock()
-		delete(runningProfiles, profileID)
-		runningMu.Unlock()
-	}()
+	putRunning(t, insertTestProfile(t, "team/a", 0), rp)
 
 	// 代理 server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/cdp/{id}/{path...}", cdpProxyHandler)
+	mux.HandleFunc("/cdp/{name}/{path...}", cdpProxyHandler)
 	proxySrv := httptest.NewServer(mux)
 	defer proxySrv.Close()
 
 	// 用 net.Dial 发原始 HTTP 升级请求，避免 http.Transport 收走连接
 	proxyAddr := strings.TrimPrefix(proxySrv.URL, "http://")
-	path := "/cdp/" + profileID + "/devtools/browser/abc"
+	path := "/cdp/team%2Fa" + cdpStableBrowserPath
 
 	rawConn, err := dialHTTPUpgrade(proxyAddr, path)
 	if err != nil {
@@ -322,6 +347,9 @@ func TestCDPProxyHandler_WebSocketUpgrade(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	if !wsFrameReceived.Load() {
 		t.Error("data did not reach the backend through the websocket proxy")
+	}
+	if got := upstreamPath.Load(); got != "/devtools/browser/abc" {
+		t.Errorf("upstream path = %v, want /devtools/browser/abc", got)
 	}
 }
 

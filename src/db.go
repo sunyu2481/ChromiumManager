@@ -73,4 +73,10 @@ func initDB() {
 	if err != nil {
 		log.Fatalf("[DB] failed to init schema: %v", err)
 	}
+
+	// agent 面只按名称定位 profile，名称需全局唯一。旧库可能遗留跨分组重名，
+	// 建索引失败时只告警不阻断启动：重名的名称在 agent 面报 409，改名后重启即可补建
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name)`); err != nil {
+		log.Printf("[DB] profile names are not globally unique, agent lookups of duplicates will fail until renamed: %v", err)
+	}
 }

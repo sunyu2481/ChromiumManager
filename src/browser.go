@@ -24,6 +24,9 @@ type runningProfile struct {
 	// devtoolsPort 是 Chromium 自选的远程调试端口，0 表示尚未就绪。
 	// 仅在 cdpReady 关闭后有效，读写需持有 runningMu。
 	devtoolsPort int
+	// devtoolsBrowserPath 是 browser target 路径，通常为 /devtools/browser/<guid>，
+	// guid 每次启动随机生成，与 devtoolsPort 一同填充。
+	devtoolsBrowserPath string
 	// cdpReady 在 devtoolsPort 填充完毕后关闭；未启用 agent 面时永不关闭。
 	cdpReady chan struct{}
 	// cdpClients 记录当前通过代理连接的 CDP 客户端数，供 /agent/browsers 观测。
@@ -37,11 +40,11 @@ type profileStartState struct {
 	err  error
 }
 
-// cdpPort 返回已就绪的调试端口，未就绪时返回 0。
-func (rp *runningProfile) cdpPort() int {
+// cdpEndpoint 返回已就绪的调试端口与 browser target 路径，未就绪时端口为 0。
+func (rp *runningProfile) cdpEndpoint() (int, string) {
 	runningMu.Lock()
 	defer runningMu.Unlock()
-	return rp.devtoolsPort
+	return rp.devtoolsPort, rp.devtoolsBrowserPath
 }
 
 var (
@@ -307,13 +310,14 @@ func startProfileOnce(idStr string) (rp *runningProfile, err error) {
 	// 异步探测调试端口：UI 启动无需等待，agent 侧则可 select 等 cdpReady
 	if agentEnabled() {
 		go func() {
-			port, err := waitDevToolsPort(absUserDataDir, cdpReadyTimeout, done)
+			port, browserPath, err := waitDevToolsPort(absUserDataDir, cdpReadyTimeout, done)
 			if err != nil {
 				log.Printf("[CDP] profile %s devtools port unavailable: %v", idStr, err)
 				return
 			}
 			runningMu.Lock()
 			rp.devtoolsPort = port
+			rp.devtoolsBrowserPath = browserPath
 			runningMu.Unlock()
 			close(rp.cdpReady)
 			log.Printf("[CDP] profile %s devtools port ready: %d", idStr, port)

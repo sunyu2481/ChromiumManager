@@ -127,7 +127,7 @@ func addProfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		msg := err.Error()
 		if strings.Contains(msg, "UNIQUE") {
-			msg = "配置名称已存在！"
+			msg = "配置名称已存在（不同分组也不能重名）！"
 		}
 		writeJSON(w, Response[any]{Code: 500, Message: msg})
 		return
@@ -156,7 +156,7 @@ func updateProfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		msg := err.Error()
 		if strings.Contains(msg, "UNIQUE") {
-			msg = "配置名称已存在！"
+			msg = "配置名称已存在（不同分组也不能重名）！"
 		}
 		writeJSON(w, Response[any]{Code: 500, Message: msg})
 		return

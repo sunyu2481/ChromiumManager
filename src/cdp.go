@@ -26,6 +26,10 @@ const (
 	// cdpPollInterval 是轮询 DevToolsActivePort 的间隔。
 	cdpPollInterval = 100 * time.Millisecond
 
+	// cdpStableBrowserPath 是 browser 级 WebSocket 的固定路径，
+	// 代理转发时补上本次启动的 guid，调用方无需在浏览器重启后重新获取地址。
+	cdpStableBrowserPath = "/devtools/browser"
+
 	// CDP HTTP 请求只需要传输小型协议消息；WebSocket 升级请求不受此限制。
 	cdpMaxRequestBody                    = 1 << 20
 	cdpMaxJSONResponse                   = 4 << 20
@@ -34,64 +38,81 @@ const (
 
 var maxCDPClientsPerProfile = defaultMaxCDPClientsPerProfile
 
-// waitDevToolsPort 轮询 user-data-dir 下的 DevToolsActivePort，返回 Chromium 自选的调试端口。
+// waitDevToolsPort 轮询 user-data-dir 下的 DevToolsActivePort，
+// 返回 Chromium 自选的调试端口与 browser target 路径。
 // abort 关闭（浏览器进程已退出）时立即放弃等待。
-func waitDevToolsPort(userDataDir string, timeout time.Duration, abort <-chan struct{}) (int, error) {
+func waitDevToolsPort(userDataDir string, timeout time.Duration, abort <-chan struct{}) (int, string, error) {
 	path := userDataDir + string(os.PathSeparator) + devToolsPortFile
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(cdpPollInterval)
 	defer ticker.Stop()
 
 	for {
-		if port, err := readDevToolsPort(path); err == nil {
-			return port, nil
+		if port, browserPath, err := readDevToolsPort(path); err == nil {
+			return port, browserPath, nil
 		}
 		select {
 		case <-abort:
-			return 0, errors.New("browser exited before devtools port was written")
+			return 0, "", errors.New("browser exited before devtools port was written")
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				return 0, fmt.Errorf("timed out after %s waiting for %s", timeout, devToolsPortFile)
+				return 0, "", fmt.Errorf("timed out after %s waiting for %s", timeout, devToolsPortFile)
 			}
 		}
 	}
 }
 
-// readDevToolsPort 读取端口文件首行。文件可能被 Chromium 写到一半，解析失败即视为未就绪。
-func readDevToolsPort(path string) (int, error) {
+// readDevToolsPort 读取端口文件：首行为端口号，次行为 browser target 路径。
+// 文件可能被 Chromium 写到一半，任一行解析失败即视为未就绪。
+func readDevToolsPort(path string) (int, string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	line, _, ok := strings.Cut(string(data), "\n")
+	line, rest, ok := strings.Cut(string(data), "\n")
 	if !ok {
 		// 次行尚未写入，说明文件不完整
-		return 0, errors.New("incomplete port file")
+		return 0, "", errors.New("incomplete port file")
 	}
 	port, err := strconv.Atoi(strings.TrimSpace(line))
 	if err != nil || port <= 0 {
-		return 0, errors.New("invalid port")
+		return 0, "", errors.New("invalid port")
 	}
-	return port, nil
+	browserPath, _, _ := strings.Cut(rest, "\n")
+	browserPath = strings.TrimSpace(browserPath)
+	// browser target 可被发现时 Chromium 只写裸前缀，否则追加每次启动随机生成的 guid
+	if browserPath != cdpStableBrowserPath {
+		if guid, ok := strings.CutPrefix(browserPath, cdpStableBrowserPath+"/"); !ok || guid == "" {
+			return 0, "", errors.New("incomplete port file")
+		}
+	}
+	return port, browserPath, nil
 }
 
-// cdpProxyHandler 把 /cdp/{id}/... 转发到对应实例的 Chromium 调试端口。
+// cdpProxyHandler 把 /cdp/{name}/... 转发到对应实例的 Chromium 调试端口。
 //
-// 直接暴露调试端口不可行，此代理解决三件事：
+// 直接暴露调试端口不可行，此代理解决四件事：
 //  1. Chrome 111+ 校验 Host 头，非 localhost/IP 一律 403 —— 转发时改写为 127.0.0.1:port
 //  2. /json/* 返回的 webSocketDebuggerUrl 指向 127.0.0.1:随机端口，
 //     外部客户端拿到后会连自己的回环地址 —— 响应体中重写为本代理地址
-//  3. 端口随机且每实例不同 —— 用稳定的 profile ID 作为路由键
+//  3. 端口随机且每实例不同 —— 用配置名称作为路由键，每次请求查库定位实例
+//  4. browser target 路径通常含每次启动随机生成的 guid —— 固定的 /devtools/browser
+//     转发时补上当前 guid，调用方注册一次即可跨浏览器重启使用
 //
 // WebSocket 无需特殊处理：标准库 ReverseProxy 收到 101 后接管为裸 TCP 双向拷贝。
 func cdpProxyHandler(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	name := r.PathValue("name")
+	id, code, err := resolveProfileName(name)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+		return
+	}
 	rp, ok := getRunning(id)
 	if !ok {
 		http.Error(w, "profile not running", http.StatusNotFound)
 		return
 	}
-	port := rp.cdpPort()
+	port, browserPath := rp.cdpEndpoint()
 	if port == 0 {
 		http.Error(w, "devtools endpoint not ready", http.StatusServiceUnavailable)
 		return
@@ -109,15 +130,14 @@ func cdpProxyHandler(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, cdpMaxRequestBody)
 	}
 
-	// 剥掉 /cdp/{id} 前缀，其余原样转发给 Chromium
-	prefix := "/cdp/" + id
-	outPath := strings.TrimPrefix(r.URL.Path, prefix)
-	if outPath == "" {
-		outPath = "/"
+	// 去掉 /cdp/{name} 前缀后原样转发给 Chromium，固定的 browser 路径补上本次启动的 guid
+	outPath := "/" + r.PathValue("path")
+	if outPath == cdpStableBrowserPath {
+		outPath = browserPath
 	}
 
 	target := fmt.Sprintf("127.0.0.1:%d", port)
-	publicBase := publicHost(r) + prefix
+	publicBase := publicHost(r) + cdpPath(name)
 
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
@@ -139,7 +159,7 @@ func cdpProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return rewriteCDPEndpoints(resp, port, publicBase)
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("[CDP] proxy error for profile %s: %v", id, err)
+			log.Printf("[CDP] proxy error for profile %q: %v", name, err)
 			http.Error(w, "cdp upstream error", http.StatusBadGateway)
 		},
 	}
@@ -206,7 +226,18 @@ func publicHost(r *http.Request) string {
 	return agentPublicHost
 }
 
-// cdpBaseURL 拼出某个实例的 CDP 接入地址，供 agent 接口与前端展示。
-func cdpBaseURL(host, id string) string {
-	return (&url.URL{Scheme: "http", Host: host, Path: "/cdp/" + id}).String()
+// cdpPath 返回配置在代理上的路径前缀，名称按单个路径段转义（中文、空格、斜杠等）。
+func cdpPath(name string) string {
+	return "/cdp/" + url.PathEscape(name)
+}
+
+// cdpBaseURL 拼出某个实例的 CDP 接入地址，供 Playwright connectOverCDP 等 HTTP 入口使用。
+func cdpBaseURL(host, name string) string {
+	return "http://" + host + cdpPath(name)
+}
+
+// cdpBrowserWsURL 拼出 browser 级 WebSocket 的固定地址，
+// 供 chrome-devtools-mcp --wsEndpoint 等只接受 ws 地址的客户端使用。
+func cdpBrowserWsURL(host, name string) string {
+	return "ws://" + host + cdpPath(name) + cdpStableBrowserPath
 }

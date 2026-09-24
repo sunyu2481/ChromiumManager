@@ -167,11 +167,22 @@ networks:
   agentnet:
 ```
 
+### 以配置名称定位浏览器
+
+Agent 接口（`/agent/*`、`/cdp/*`）一律使用**配置名称**定位浏览器，不使用内部 ID。配置名称全局唯一，不同分组之间也不能重名。如果从旧版本升级时库里已有跨分组的同名配置，agent 访问这些名称会返回 409，在管理界面改名后重启容器即可。
+
+名称含中文、空格等字符时，放进地址前需要做 URL 编码（例如 `香港 01` 对应 `/cdp/%E9%A6%99%E6%B8%AF%2001`）。`acquire` 返回的地址已经编码好，可以直接使用。
+
 ### 获取可用浏览器列表
 
 ```bash
 curl -H "Authorization: Bearer your-secret-token" \
      http://chromium-manager:10102/agent/browsers
+
+# 响应示例（group 为分组名称，未分组为空；cdpUrl/wsUrl 仅在 CDP 就绪后出现）
+# {"code":200,"data":[{"name":"HK-01","group":"电商","running":true,"cdpReady":true,
+#   "cdpUrl":"http://chromium-manager:10102/cdp/HK-01",
+#   "wsUrl":"ws://chromium-manager:10102/cdp/HK-01/devtools/browser","clients":1}]}
 ```
 
 ### 按需获取浏览器（自动启动 + 等待 CDP 就绪）
@@ -184,14 +195,20 @@ curl -H "Authorization: Bearer your-secret-token" \
      -d '{"name": "HK-01"}'
 
 # 响应示例
-# {"code":200,"data":{"id":"Xk3mP9qR","cdpUrl":"http://chromium-manager:10102/cdp/Xk3mP9qR","started":true}}
+# {"code":200,"data":{"name":"HK-01","cdpUrl":"http://chromium-manager:10102/cdp/HK-01",
+#   "wsUrl":"ws://chromium-manager:10102/cdp/HK-01/devtools/browser","started":true}}
 ```
+
+`cdpUrl` 和 `wsUrl` 都只由名称决定。`wsUrl` 是 browser 级的固定 WebSocket 地址，代理会自动转发到当前实例，浏览器重启后依然有效。
 
 ### 接入 Claude Code（通过 chrome-devtools-mcp）
 
+chrome-devtools-mcp 的 `--browser-url` 会丢掉地址里的 `/cdp/<名称>` 路径段，所以要改用 `--wsEndpoint` 连固定的 `wsUrl`。这样只需注册一次：
+
 ```bash
 claude mcp add chrome -- npx chrome-devtools-mcp@latest \
-  --browser-url http://chromium-manager:10102/cdp/Xk3mP9qR
+  --wsEndpoint ws://chromium-manager:10102/cdp/HK-01/devtools/browser
+# 设置了 AGENT_TOKEN 时追加：--wsHeaders '{"Authorization":"Bearer your-secret-token"}'
 ```
 
 ### 接入 Playwright 脚本
@@ -199,7 +216,7 @@ claude mcp add chrome -- npx chrome-devtools-mcp@latest \
 ```js
 const { chromium } = require('playwright')
 const browser = await chromium.connectOverCDP(
-  'http://chromium-manager:10102/cdp/Xk3mP9qR'
+  'http://chromium-manager:10102/cdp/HK-01'
 )
 // browser.contexts()[0] 即带完整 Cookie 与指纹的持久化上下文
 const page = await browser.contexts()[0].newPage()
@@ -211,16 +228,16 @@ await page.goto('https://example.com')
 ```bash
 # 仅解除占用，保持浏览器运行
 curl -X POST http://chromium-manager:10102/agent/release \
-     -d '{"id":"Xk3mP9qR"}'
+     -d '{"name":"HK-01"}'
 
 # 同时关闭浏览器
 curl -X POST http://chromium-manager:10102/agent/release \
-     -d '{"id":"Xk3mP9qR","stop":true}'
+     -d '{"name":"HK-01","stop":true}'
 ```
 
 ### 管理界面操作
 
-浏览器运行时，操作列会出现 **CDP** 按钮，点击可直接复制当前实例的 CDP 接入地址。
+浏览器运行时，操作列的更多菜单（⋯）中有 **复制 CDP 地址**，复制的是按名称寻址的接入地址。
 
 ### 环境变量
 

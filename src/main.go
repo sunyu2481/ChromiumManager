@@ -325,7 +325,7 @@ func main() {
 		agentMux.HandleFunc("GET /agent/browsers", agentBrowsers)
 		agentMux.HandleFunc("POST /agent/acquire", agentAcquire)
 		agentMux.HandleFunc("POST /agent/release", agentRelease)
-		agentMux.HandleFunc("/cdp/{id}/{path...}", cdpProxyHandler)
+		agentMux.HandleFunc("/cdp/{name}/{path...}", cdpProxyHandler)
 
 		servers = append(servers, &http.Server{
 			Addr:    agentAddr,

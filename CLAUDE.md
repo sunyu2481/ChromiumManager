@@ -23,7 +23,7 @@ cd src/web && pnpm dev           # vite dev server（注意下方 CORS 陷阱）
 docker build -t chromium-manager .
 ```
 
-- **无任何测试**：没有 `*_test.go`，也没有前端测试框架。改动靠手动验证。
+- **测试**：Go 侧有 `*_test.go`（`cd src && go test ./...`，同样需要先有 `src/web/dist`）。需要数据库或运行表的测试用 `useTestDB` / `insertTestProfile`（`src/db_test.go`）与 `putRunning`（`src/browser_test.go`）搭临时环境。前端没有测试框架，改动靠手动验证。
 - `vite-plugin-eslint2` 以 `fix: false` 挂在构建管线里（`src/web/vite.config.js:13`），**lint 报错会直接中断 `pnpm dev` 和 `pnpm build`**。
 - CI（`.github/workflows/docker-image.yml`）仅 `workflow_dispatch` 触发，会从同名 tag 的 release 下载 chromium 二进制，再多架构构建推 DockerHub。
 - `go.mod` 声明 `go 1.25.7`，Dockerfile 用 `golang:1.26-alpine`。SQLite 驱动是纯 Go 的 `modernc.org/sqlite`，因此可以 `CGO_ENABLED=0`，不要换成 `mattn/go-sqlite3`。
@@ -62,6 +62,8 @@ docker build -t chromium-manager .
 
 **会话认证.** `AUTH_PASSWORD` 必须显式配置，`AUTH_USERNAME` 默认为 `admin`；未配置密码时容器初始化和 manager 都会拒绝启动。`init-auth-gateway` 在基础镜像生成 nginx 配置后注入 `auth_request`，让公网 Selkies 页面、WebSocket 和文件入口调用 manager 的 `/auth/check` 校验外部浏览器 Cookie。管理面只允许 loopback 访问，不再要求内部 Chromium 二次登录；`LISTEN_ADDR` 即使改为公网地址，非 loopback 请求也会被拒绝。agent/CDP 面独立使用 `AGENT_TOKEN` Bearer 认证，不继承上述会话。
 
+**Agent 面只认配置名称.** `/agent/*` 与 `/cdp/{name}/...` 既不接受也不返回内部 sqids ID，统一经 `resolveProfileName`（`src/handler_agent.go`）查库换成 ID，再查以 ID 为键的运行表；CDP 代理因此每个 HTTP 请求都会查一次库。`/cdp/{name}/devtools/browser` 是固定的 browser WebSocket 地址，代理用 `DevToolsActivePort` 第二行记下的路径补上本次启动的 guid。管理面 CRUD 仍然用 ID。
+
 **指纹配置整体存一列 JSON.** `FingerprintConfig` 实现了 `sql.Scanner` / `driver.Valuer`（`src/main.go:100-125`），序列化后进 `profiles.fingerprint` 这一个 TEXT 列。**新增指纹字段只需改结构体 + 前端表单，不需要动 schema 或写迁移。**
 
 **user-data-dir 由指纹 seed 派生，不是 profile ID.** 路径为 `${DATA_DIR}/profiles/encodeID(seed)`（`src/handler_profile.go:247`），删除 profile 时按同一规则清理目录（`:191`）。seed 只在创建时随机生成一次（`enrichFingerprint`，`src/browser.go:76`），更新走的是前端原样回传——**改动 profile 更新链路时务必保证 `fingerprint.seed` 被完整透传，否则会丢失整个浏览器数据目录**。
@@ -76,7 +78,7 @@ docker build -t chromium-manager .
 - 删除分组不删配置：事务里把 `profiles.group_id` 置 0（`src/handler_group.go:98`）。
 - 启动前清理 `Singleton*` 锁文件（`src/handler_profile.go:254`），避免 Chromium 复用已死实例。
 - 自定义启动参数按 `--` 切分（`splitArgs`，`src/browser.go:82`），所以每个参数必须以 `--` 开头，不支持带空格的引号值。
-- DB 连接池被限制为单连接（`src/db.go:21`）+ WAL；profile 名在分组内唯一（`src/db.go:71`），违反唯一约束时后端会把错误替换成中文提示。
+- DB 连接池被限制为单连接（`src/db.go:21`）+ WAL；profile 名全局唯一（`idx_profiles_name`，agent 面按名称定位依赖它），违反唯一约束时后端会把错误替换成中文提示。旧库遗留跨分组重名时该索引建不起来，`initDB` 只告警不退出，重名的名称在 agent 面返回 409。
 - 分页 `pageSize` 上限 200，越界回退 10（`src/handler_profile.go:29`）。
 - `DATA_DIR` 环境变量决定数据根目录，默认 `data`，容器内为 `/config/data`。
 

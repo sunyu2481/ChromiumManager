@@ -52,3 +52,16 @@ func TestStartProfileJoinsPendingStart(t *testing.T) {
 		t.Fatalf("startProfile() = (%p, %v, %v), want (%p, false, nil)", got.rp, got.started, got.err, want)
 	}
 }
+
+// putRunning 把伪造的运行态登记到运行表，测试结束后摘除。
+func putRunning(t *testing.T, id string, rp *runningProfile) {
+	t.Helper()
+	runningMu.Lock()
+	runningProfiles[id] = rp
+	runningMu.Unlock()
+	t.Cleanup(func() {
+		runningMu.Lock()
+		delete(runningProfiles, id)
+		runningMu.Unlock()
+	})
+}
